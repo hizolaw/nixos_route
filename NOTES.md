@@ -137,3 +137,17 @@ initramfs 喂狗后仍复位。此版：
 `watchdog.handle_boot_enabled=1` + initramfs 喂狗，全程无缝喂。
 
 镜像 `nixos-r4s-sd-diag.img` sha256 `4870c994d08e6613eb0025b5b19670177c6d6ec17a31ca826fc6d5bbcf9bed98`。
+
+## 喂狗没止住：崩在 systemd 极早期（activation 之前）
+
+读回卡：ext4 根仍然只有 /nix（无 /etc、/var），无 journal、无 panic。说明
+watchdog 喂上之后，systemd 还是在 **activation 之前**就挂了/被复位。加诊断：
+- r4s.nix 加 `r4s-early-log`：sysinit 前把 dmesg / failed units / mounts /
+  cgroup 写到 `/boot/early-log.txt`；
+- bootargs 加 `systemd.log_target=kmsg systemd.log_level=debug`，让 systemd
+  日志进内核 log，能被 dmesg/ramoops 看到。
+
+另：make-image.sh 的 `cp --reflink=auto` + dd splice 会把 FAT 分区（sector
+65536+）清零，改成 `--reflink=never`。
+
+镜像 `nixos-r4s-sd-diag.img` sha256 `596ea1bacdc451da2079c3b0f59dd125a94006a7390bddf6ec9c0cb8ed67af67`。

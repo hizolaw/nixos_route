@@ -129,6 +129,39 @@ in
     };
   };
 
+  # Capture how far systemd gets before the board dies.  Writes a marker +
+  # dmesg + mount/cgroup state to the FAT /boot partition as early as sysinit,
+  # so the failure point can be read back from the SD card without a UART.
+  systemd.services.r4s-early-log = {
+    description = "Write early-boot diagnostic to /boot";
+    wantedBy = [ "sysinit.target" ];
+    before = [ "sysinit.target" ];
+    after = [ "systemd-udevd.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    script = ''
+      mkdir -p /run/earlymnt
+      if mount -t vfat /dev/mmcblk1p1 /run/earlymnt 2>/dev/null; then
+        {
+          echo "=== r4s-early-log ==="
+          echo "systemd reached sysinit"
+          echo "--- dmesg tail ---"
+          dmesg | tail -80
+          echo "--- systemd units failed ---"
+          systemctl --no-pager list-units --state=failed 2>&1 | head -20
+          echo "--- mounts ---"
+          mount | grep -E "mmcblk|overlay|/boot|/nix" | head -20
+          echo "--- cgroup ---"
+          ls -la /sys/fs/cgroup 2>/dev/null
+        } > /run/earlymnt/early-log.txt 2>&1
+        sync
+        umount /run/earlymnt
+      fi
+    '';
+  };
+
   # Persist the journal so a crash can be diagnosed from the SD card.
   services.journald.storage = "persistent";
 

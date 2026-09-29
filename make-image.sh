@@ -19,7 +19,10 @@ echo "source image : $src"
 echo "output image : $out"
 
 [ -e "$out" ] && chmod u+w "$out"
-cp --reflink=auto "$src" "$out"
+# NOTE: use a full copy, not reflink.  A reflink + the dd splice below has
+# been observed to leave the FAT partition (sector 65536+) zeroed out on some
+# filesystems, which yields "non DOS media" and an unbootable card.
+cp --reflink=never "$src" "$out"
 chmod u+w "$out"
 
 # copy sectors 64 .. 65535 (32 KiB .. 32 MiB) from the bootloader backup
