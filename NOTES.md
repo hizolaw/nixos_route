@@ -101,3 +101,15 @@ cd /home/hzluo/Workspace/bot/r4s-nixos
   无论崩得多早，下次开机（自动重启或手动断电重开）都会把上次崩溃日志落盘。
 
 复现：`ref-fw/bsp-ramdisk-diag.gz`（原 `bsp-ramdisk.gz` + /init 里加 pstore dump）。
+
+## 已确认：看门狗复位循环（5-10s 一次）
+
+用户反馈：SYS 灭掉后**会自己再亮、循环**，上电到灭约 **5-10s**。结合 pstore
+为空（无 panic）→ 结论是 **U-Boot 启动的 RK3399 看门狗**在极早期复位，systemd
+还没喂到就超时了。
+
+修法：在 initramfs 的 `/init` 里，`mount devtmpfs` 后立刻后台循环
+`printf '1' > /dev/watchdog`（每 1s 喂一次），把 U-Boot 到 systemd 之间的空档
+补上；systemd 侧 `RuntimeWatchdogSec` 继续在 switch_root 后接管。
+
+镜像 `nixos-r4s-sd-diag.img` sha256 `1b93ae9ba19cdb5b034287fdbf4a7d4507f56d60a084672bdf2f0839fbde011e`。
