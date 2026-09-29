@@ -86,3 +86,18 @@ cd /home/hzluo/Workspace/bot/r4s-nixos
 2. 若还灭 → 插卡回笔记本挂 `/dev/sda1` 读 `/boot/r4s-diag.txt` 和 `/boot/pstore/`，把内容发我；
    pstore 会存下上次崩溃的 console/panic 日志，不用串口也能定位。
 4. 稳定后：把 `r4s.nix` 改成真正的路由模式（WAN/LAN 分离 + NAT + DHCP）。
+
+## 关键进展：崩溃发生在极早期（activation 之前）
+
+读回卡后确认：ext4 根分区里**只有 /nix，没有 /etc、/var**，FAT 里也没有
+`r4s-diag.txt`。说明系统在 **NixOS activation 之前**就死了（systemd 还没建
+/etc、/var，更没到 multi-user）。LED 亮=内核已起，随后灭=内核级 crash/reset。
+
+为抓日志，改了两个点：
+- r4s.nix 加 `r4s-pstore`（multi-user 前 dump /sys/fs/pstore），但对这么早的
+  崩溃没用（根本到不了 multi-user）。
+- **initramfs 层 dump**：改 FriendlyWrt ramdisk 的 `/init`，在 `switch_root` 前
+  就把 `/sys/fs/pstore/*` 挂 FAT(`/dev/mmcblk1p1`) 拷到 `/boot/pstore/`。这样
+  无论崩得多早，下次开机（自动重启或手动断电重开）都会把上次崩溃日志落盘。
+
+复现：`ref-fw/bsp-ramdisk-diag.gz`（原 `bsp-ramdisk.gz` + /init 里加 pstore dump）。
