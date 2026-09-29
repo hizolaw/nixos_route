@@ -1,0 +1,33 @@
+# 私有 nix store（65G，含 qemu-user 闭包，不入库）
+/.store-root/
+
+# 生成的镜像与引导二进制（GB 级）
+*.img
+*.bin
+*.squashfs
+*.cpio
+*.gz
+*.ko
+
+# 大型二进制的设备树 / 内核
+*.dtb
+
+# 指向 /nix/store 的构建产物软链
+/result
+/uboot-r4s-rkbin
+/uboot2022-sandbox
+
+# 提取的 FriendlyWrt 大型原始文件
+/ref-fw/boot.img
+/ref-fw/kernel.img
+/ref-fw/resource.img
+/ref-fw/rootfs.squashfs
+/ref-fw/ramdisk.cpio
+/ref-fw/bootloader-32MiB.bin
+/ref-fw/uboot.bin
+/ref-fw/bsp-Image
+/ref-fw/bsp-8.img
+/ref-fw/bsp-64.img
+/ref-fw/bsp-ramdisk.gz
+/ref-fw/ramdisk/
+/ref-fw/modules/
