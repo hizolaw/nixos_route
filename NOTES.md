@@ -122,3 +122,18 @@ initramfs 喂狗后仍复位。此版：
   `/sys/class/watchdog/*`、`dmesg` 落盘到 `/boot/boot-diag.txt`，pstore 照旧。
 
 镜像 `nixos-r4s-sd-diag.img` sha256 `347df12ff96b2427270f054fd799cf13873f2c78d86862b9ef3f50c9d44b3777`。
+
+## 抓到了：dw_wdt "No valid TOPs array specified"
+
+`boot-diag.txt` 关键行：
+- `/dev/watchdog`、`/dev/watchdog0` 都在，`dw_wdt ff848000.watchdog` probe 成功；
+- **`dw_wdt: No valid TOPs array specified`** —— BSP DTB 没 `snps,watchdog-tops`，
+  dw_wdt 无法设超时（WDIOC_SETTIMEOUT 失败），所以 systemd 的 RuntimeWatchdogSec
+  不可靠；
+- `watchdog: watchdog0: watchdog did not stop!` —— 这只狗一旦被 U-Boot 启动就停不掉。
+
+修法：去掉 `RuntimeWatchdogSec`，改成自写的 `watchdog-feed` 服务——直接
+`exec 3>/dev/watchdog` 后每秒 `printf '1' >&3` 喂，不碰超时；配合
+`watchdog.handle_boot_enabled=1` + initramfs 喂狗，全程无缝喂。
+
+镜像 `nixos-r4s-sd-diag.img` sha256 `4870c994d08e6613eb0025b5b19670177c6d6ec17a31ca826fc6d5bbcf9bed98`。

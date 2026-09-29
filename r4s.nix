@@ -21,6 +21,25 @@ let
     mkdir -p $out/lib/modules
     cp -r ${./ref-fw/modules}/* $out/lib/modules/
   '';
+
+  # The RK3399 watchdog is armed by the bootloader and the BSP dw_wdt driver
+  # cannot set its timeout ("No valid TOPs array specified"), so systemd's
+  # RuntimeWatchdogSec (which does WDIOC_SETTIMEOUT) is unreliable here.  Feed
+  # it directly, every second, without touching the timeout.
+  watchdogFeedScript = pkgs.writeShellScript "watchdog-feed" ''
+    wdt=""
+    while [ -z "$wdt" ]; do
+      for d in /dev/watchdog /dev/watchdog0; do
+        if [ -c "$d" ]; then wdt="$d"; break; fi
+      done
+      [ -n "$wdt" ] || sleep 0.2
+    done
+    exec 3>"$wdt"
+    while :; do
+      printf '1' >&3 2>/dev/null || true
+      sleep 1
+    done
+  '';
 in
 {
   imports = [
@@ -94,11 +113,20 @@ in
     compressImage = false;
   };
 
-  # The BSP kernel enables the RK3399 watchdog (snps,dw-wdt in the device
-  # tree); FriendlyWrt feeds it via a userspace daemon, NixOS does not by
-  # default, so the board resets shortly after boot.  Have systemd feed it.
-  systemd.settings.Manager = {
-    RuntimeWatchdogSec = "10s";
+  # The RK3399 watchdog is fed by a dedicated service (see watchdogFeedScript),
+  # not by systemd's RuntimeWatchdogSec: the BSP dw_wdt driver reports
+  # "No valid TOPs array specified", so WDIOC_SETTIMEOUT fails and systemd's
+  # runtime watchdog is unreliable.  Feed it directly instead.
+  systemd.services.watchdog-feed = {
+    description = "Feed the RK3399 hardware watchdog";
+    wantedBy = [ "sysinit.target" ];
+    before = [ "sysinit.target" ];
+    serviceConfig = {
+      Type = "simple";
+      ExecStart = "${watchdogFeedScript}";
+      Restart = "always";
+      RestartSec = "1";
+    };
   };
 
   # Persist the journal so a crash can be diagnosed from the SD card.
