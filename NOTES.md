@@ -20,11 +20,11 @@
 3. **主line 内核 6.18 + 主line DTB 在 1G 板上起不来**（SYS 灯完全没反应）。换成 FriendlyWrt 25.12
    的 BSP 内核 6.6.134 + BSP DTB `rk3399-nanopi4-revXX` 后才成功启动（SYS 灯亮）。
 4. **看门狗**：BSP DTB 里 `watchdog@ff848000` (rockchip,rk3399-wdt) 默认开启，NixOS 默认不喂，
-   开机几十秒后被复位（"SYS 亮一会又灭"）。最终修法：用 device tree overlay 直接把 watchdog 节点
-   `status = "disabled"`（`disable-watchdog.dts` → `bsp-r4s-nowdt.dtb`），一劳永逸；r4s.nix 里仍保留
-   `RuntimeWatchdogSec` 作兜底（DTB 关掉后它只会打一行警告，无害）。
-5. **r8169 疑崩（未最终确认）**：BSP 6.6 内核 + r8169 有已知死机/冻结嫌疑；最终回到 eth0+eth1
-   双口桥接方案。先以"稳定常亮 + 能 ping 通"为准，再单独排查第二个口。
+   开机几十秒后被复位（"SYS 亮一会又灭"）。FriendlyWrt 是**开着看门狗 + userspace 喂**（procd），
+   所以能一直闪。把 watchdog 节点 `status="disabled"`（build-bsp5）**反而更糟**：如果 U-Boot/ATF
+   已经把它启动，内核不认它 → 没人喂 → 照样复位。正确姿势是**保持 enabled + systemd 喂**。
+5. **r8169 疑崩（未最终确认）**：BSP 6.6 内核 + r8169 有已知死机/冻结嫌疑。诊断版先黑名单
+   r8169、只用原生 GMAC(eth0)，把它从变量里排除。
 
 ## 能启动的引导栈（当前方案）
 
@@ -41,7 +41,8 @@
 | 文件 | 说明 |
 |---|---|
 | `nixos-r4s-sd.img` | NixOS sd 镜像（vendor U-Boot 已拼入，FAT /boot + ext4 root），由 make-image.sh 生成 |
-| `nixos-r4s-sd-bsp.img` | **当前要刷的（稳定版）**：上面那张 + BSP 内核/无看门狗 DTB/ramdisk + boot.scr（net.ifnames=0、br-lan 桥接 eth0+eth1 静态 .5、r4s-diag 诊断） |
+| `nixos-r4s-sd-bsp.img` | 上一版：无看门狗 DTB + br-lan 桥接 eth0+eth1（**上机会灭，废弃**） |
+| `nixos-r4s-sd-diag.img` | **当前诊断版**：看门狗 enabled+systemd 喂、eth0 单口、r8169 黑名单、ramoops/pstore 抓崩溃日志 |
 | `nixos-r4s-sd-rkbin.img` | 早期实验：rkbin + mainline U-Boot 2026.04（废弃） |
 | `nixos-r4s-sd-bootscr.img` | 早期实验：mainline 内核 + boot.scr（废弃） |
 | `sd-bootloader-32MiB.bin` | 原卡前 32MiB 备份（引导器，唯一的"后悔药"） |
@@ -75,12 +76,13 @@ cd /home/hzluo/Workspace/bot/r4s-nixos
 - `build-bsp2.log` —— 看门狗喂食 + journald persistent（成功）。
 - `build-bsp3.log` —— systemd-networkd 桥接 + r8169 提前加载（成功，但上机崩）。
 - `build-bsp4.log` —— 实验：eth0 静态 .5 + r8169 黑名单。
-- `build-bsp5.log` —— **当前稳定版**：关看门狗 DTB + net.ifnames=0 + 双口桥接 + r4s-diag。
+- `build-bsp5.log` —— 关看门狗 DTB + net.ifnames=0 + 双口桥接 + r4s-diag（上机仍灭）。
+- `build-bsp6.log` —— **当前诊断版**：看门狗 enabled + eth0 单口 + r8169 黑名单 + ramoops/pstore。
 
 ## 未决 / 下一步
 
-1. 刷 `nixos-r4s-sd-bsp.img`（稳定版，看门狗已关），预期：**SYS 从开机起一直闪（heartbeat）不再灭**，
-   `ping 192.168.1.5` 通。
-2. 若稳定闪但 ping 不通 → 插卡回笔记本挂 `/dev/sda1` 读 `/boot/r4s-diag.txt`，看网口名/桥接。
-3. 若仍会中途灭 → 说明不是看门狗，需串口日志（3 针 UART, 1500000 8N1；用户暂不想串口）。
+1. 刷 `nixos-r4s-sd-diag.img`（看门狗 enabled+喂、eth0 单口、r8169 黑名单、ramoops），网线插
+   **WAN 口（原生 GMAC/eth0）**。预期：SYS 一直闪不再灭、`ping 192.168.1.5` 通。
+2. 若还灭 → 插卡回笔记本挂 `/dev/sda1` 读 `/boot/r4s-diag.txt` 和 `/boot/pstore/`，把内容发我；
+   pstore 会存下上次崩溃的 console/panic 日志，不用串口也能定位。
 4. 稳定后：把 `r4s.nix` 改成真正的路由模式（WAN/LAN 分离 + NAT + DHCP）。

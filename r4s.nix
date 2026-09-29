@@ -51,7 +51,16 @@ in
     "net.ifnames=0"
     "oops=panic"
     "panic=10"
+    "ramoops.mem_address=0x20000000"
+    "ramoops.mem_size=0x100000"
+    "ramoops.record_size=0x20000"
+    "ramoops.console_size=0x80000"
   ];
+
+  # The PCIe RTL8111H (r8169) is a prime crash suspect on this BSP kernel.
+  # For diagnosis, keep it out of the picture entirely: only the native
+  # GMAC (eth0) is used.
+  boot.blacklistedKernelModules = [ "r8169" ];
 
   hardware.deviceTree = {
     enable = true;
@@ -110,25 +119,21 @@ in
   };
 
   # -------------------------------------------------------------- network
-  # Same setup as before the switch-over: both ethernet ports bridged,
-  # static 192.168.1.5/24 via 192.168.1.1.  This keeps the box reachable.
+  # Minimal setup for diagnosis: only the native GMAC (eth0, WAN port) with a
+  # static address.  The PCIe NIC (r8169) is blacklisted above.
   networking = {
     hostName = "r4s";
     useDHCP = false;
     usePredictableInterfaceNames = false;
-    bridges."br-lan".interfaces = [ "eth0" "eth1" ];
-    interfaces = {
-      eth0.macAddress = "a2:fe:c3:06:8f:78";
-      eth1.macAddress = "a2:fe:c3:06:8f:79";
-      br-lan = {
-        useDHCP = false;
-        ipv4.addresses = [
-          {
-            address = "192.168.1.5";
-            prefixLength = 24;
-          }
-        ];
-      };
+    interfaces.eth0 = {
+      useDHCP = false;
+      macAddress = "a2:fe:c3:06:8f:78";
+      ipv4.addresses = [
+        {
+          address = "192.168.1.5";
+          prefixLength = 24;
+        }
+      ];
     };
     defaultGateway = "192.168.1.1";
     nameservers = [
@@ -169,6 +174,24 @@ in
       echo "--- boot journal (tail) ---"
       journalctl -b --no-pager -n 80 2>&1
       sync
+    '';
+  };
+
+  # Dump the previous boot's pstore/ramoops console to the FAT /boot partition
+  # so a crash can be read back from the SD card without a serial console.
+  systemd.services.r4s-pstore = {
+    wantedBy = [ "multi-user.target" ];
+    before = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    script = ''
+      if [ -d /sys/fs/pstore ]; then
+        mkdir -p /boot/pstore
+        cp -a /sys/fs/pstore/. /boot/pstore/ 2>/dev/null || true
+        sync
+      fi
     '';
   };
 
