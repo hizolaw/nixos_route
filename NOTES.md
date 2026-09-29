@@ -113,3 +113,12 @@ cd /home/hzluo/Workspace/bot/r4s-nixos
 补上；systemd 侧 `RuntimeWatchdogSec` 继续在 switch_root 后接管。
 
 镜像 `nixos-r4s-sd-diag.img` sha256 `1b93ae9ba19cdb5b034287fdbf4a7d4507f56d60a084672bdf2f0839fbde011e`。
+
+## 追加：initramfs 喂狗没止住，加双保险 + 诊断
+
+initramfs 喂狗后仍复位。此版：
+- bootargs 加 `watchdog.handle_boot_enabled=1`（让内核在 dw_wdt probe 时自动喂）；
+- initramfs 喂 /dev/watchdog 或 /dev/watchdog0，并把 `/dev/watchdog*`、
+  `/sys/class/watchdog/*`、`dmesg` 落盘到 `/boot/boot-diag.txt`，pstore 照旧。
+
+镜像 `nixos-r4s-sd-diag.img` sha256 `347df12ff96b2427270f054fd799cf13873f2c78d86862b9ef3f50c9d44b3777`。
