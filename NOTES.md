@@ -151,3 +151,13 @@ watchdog 喂上之后，systemd 还是在 **activation 之前**就挂了/被复�
 65536+）清零，改成 `--reflink=never`。
 
 镜像 `nixos-r4s-sd-diag.img` sha256 `596ea1bacdc451da2079c3b0f59dd125a94006a7390bddf6ec9c0cb8ed67af67`。
+
+## 加：把 systemd 早期输出重定向到 /boot/systemd.log
+
+`early-log.txt` 没生成 → systemd 在 sysinit 之前就死了（连 early-log 服务都没
+跑）。为了看到它到底怎么死的，改 initramfs 的 /init：
+- switch_root 前把 FAT 挂到 `${rootmnt}/boot`（新根里的 /boot）；
+- `exec run-init ... >${rootmnt}/boot/systemd.log 2>&1`，把 systemd 的 stdout/
+  stderr 落到 FAT。这样"run-init 失败"或"systemd 启动即崩"都能留下痕迹。
+
+镜像 `nixos-r4s-sd-diag.img` sha256 `f4e66e2ef575bfa453424cd33039fab8845af2a5203747467c85224c5f94a149`。
