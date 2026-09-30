@@ -131,8 +131,6 @@ in
     '';
     # /boot is the FAT partition, so no second copy is needed in the rootfs.
     populateRootCommands = lib.mkForce "";
-    # U-Boot 2022.07 cannot read ext4 with orphan_file/metadata_csum_seed.
-    rootFilesystemCreator = ./ext4-uboot.nix;
     # Keep the raw image: it is written to the card directly from this
     # machine, and skipping zstd saves a lot of emulated CPU time.
     compressImage = false;
@@ -196,7 +194,6 @@ in
   services.journald.storage = "persistent";
 
   # mount the FAT firmware partition as /boot
-  fileSystems."/boot/firmware".enable = lib.mkForce false;
   fileSystems."/boot" = {
     device = "/dev/disk/by-label/FIRMWARE";
     fsType = "vfat";
@@ -329,5 +326,5 @@ in
     vim
   ];
 
-  system.stateVersion = "26.05";
+  system.stateVersion = "24.05";
 }

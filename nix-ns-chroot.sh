@@ -16,7 +16,7 @@
 set -euo pipefail
 
 qemu_user=/nix/store/475vzq8qm85h4a5gqg4srlw8wdzfbi5r-qemu-user-11.0.1
-nixpkgs_src=/nix/store/3q95vz593xbq4rrpsd3yr6lixsygkhcj-nixexprs.tar.xz
+nixpkgs_src=/nix/store/0000000000000000000000000000aaaa-nixos-24.05-nixexprs
 
 # everything (private store, chroot root, logs) stays next to this script
 script_dir=$(cd "$(dirname "$0")" && pwd)

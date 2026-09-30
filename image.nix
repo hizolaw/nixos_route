@@ -1,8 +1,8 @@
 # Evaluate the R4S configuration for aarch64-linux and return the SD image
 # derivation.  Used from inside the qemu/chroot sandbox (see nix-ns-chroot.sh).
 let
-  # nixos-26.05 (stable), unpacked
-  nixpkgs = /nix/store/3q95vz593xbq4rrpsd3yr6lixsygkhcj-nixexprs.tar.xz;
+  # nixos-24.05 (stable, systemd 255.9 + glibc 2.39, kernel 6.6 era), unpacked
+  nixpkgs = /nix/store/0000000000000000000000000000aaaa-nixos-24.05-nixexprs;
 
   evalCfg = import (nixpkgs + "/nixos/lib/eval-config.nix") {
     system = "aarch64-linux";
