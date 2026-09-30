@@ -161,3 +161,15 @@ watchdog 喂上之后，systemd 还是在 **activation 之前**就挂了/被复�
   stderr 落到 FAT。这样"run-init 失败"或"systemd 启动即崩"都能留下痕迹。
 
 镜像 `nixos-r4s-sd-diag.img` sha256 `f4e66e2ef575bfa453424cd33039fab8845af2a5203747467c85224c5f94a149`。
+
+## 抓到根因方向：FriendlyWrt initramfs 会 auto-resize 根分区
+
+读卡发现 sda2 根上没有任何 `/boot`、`/etc`（我加在 exec 前的 `mkdir /boot` 都没
+落盘），说明 initramfs 没走到最后，卡在根挂载之后的 auto-resize。
+FriendlyWrt 的 `/scripts/local` 里 `local_mount_root` 会：umount 根 →
+`parted resizepart` + `resize2fs -f`（因为 `/etc/fs.resized` 标记在 NixOS 根上
+永远建不出来，所以每次开机都跑），在大卡上容易卡死/慢。
+
+修法：改 `scripts/local` 跳过 resize，直接 `mount -o remount,rw`。
+
+镜像 `nixos-r4s-sd-diag.img` sha256 `bf98eb010de8eeb01aa38cab14bc44d773957440d8b885d298ae70b0c65d8287`。
