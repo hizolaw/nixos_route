@@ -106,6 +106,10 @@ in
   # GMAC (eth0) is used.
   boot.blacklistedKernelModules = [ "r8169" ];
 
+  # bcache-tools ships a udev rule referencing /bin/sh, which trips NixOS 24.05's
+  # udev sanity check.  The R4S doesn't use bcache, so drop it entirely.
+  boot.bcache.enable = false;
+
   hardware.deviceTree = {
     enable = true;
     name = "rockchip/rk3399-nanopi-r4s.dtb";

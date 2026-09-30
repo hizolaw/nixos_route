@@ -199,3 +199,12 @@ ${rootmnt}/dev` 因为 NixOS 根只有 /nix（没有 /dev 目录）而失败，�
 和 mount 表落到 FAT 的 /boot/gen-dmesg.txt。
 
 镜像 `nixos-r4s-sd-diag.img` sha256 `b343029ead68d597422a614dd39c67e432d9036d1ff984148af52231c950ed7e`。
+
+## 换 NixOS 24.05（systemd 255.9 + glibc 2.39 + bash stage2 init）
+
+绕开 systemd 260 与 BSP 6.6 内核的兼容问题，改用 NixOS 24.05：
+- init 是 bash 脚本（NixOS stage 2），先跑 activation 再 exec systemd，兼容性更好；
+- 修复 24.05 构建：`boot.bcache.enable=false`（bcache-tools 的 udev 规则引用 /bin/sh 会卡构建）；
+- 移除 26.05 专属的 sdImage.rootFilesystemCreator、fileSystems."/boot/firmware"。
+
+镜像 `nixos-r4s-sd-diag.img` sha256 `79b99d99ee04206d227897cba19ac9538d1c4b369fc817027cf8ce6441ce9444`。
