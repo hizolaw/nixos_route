@@ -173,3 +173,20 @@ FriendlyWrt 的 `/scripts/local` 里 `local_mount_root` 会：umount 根 →
 修法：改 `scripts/local` 跳过 resize，直接 `mount -o remount,rw`。
 
 镜像 `nixos-r4s-sd-diag.img` sha256 `bf98eb010de8eeb01aa38cab14bc44d773957440d8b885d298ae70b0c65d8287`。
+
+## 真凶：NixOS 根没有 /dev，exec 的 `<${rootmnt}/dev/console` 重定向失败
+
+`boot-marker.txt` 显示三个标记都到了（after-mountroot / before-init-check /
+before-exec），根也挂载成功（EXT4 ro→rw）。但 exec 前 `mkdir /boot` 没落盘 →
+exec 那行没执行成功。
+
+原因：initramfs 的 `/scripts/init-bottom/udev` 里 `mount --move /dev
+${rootmnt}/dev` 因为 NixOS 根只有 /nix（没有 /dev 目录）而失败，导致
+`${rootmnt}/dev/console` 不存在，`exec run-init ... <${rootmnt}/dev/console`
+重定向失败 → initramfs panic。
+
+修法：
+- udev 脚本里 `mkdir -p ${rootmnt}/dev` 再 move；
+- exec 那行 stdin 改成 `</dev/null`（不依赖新根的 /dev/console）。
+
+镜像 `nixos-r4s-sd-diag.img` sha256 `77f6ca9a9298ff06ef26b4042b2a7abb3127acb8ccb6a79a2c22b389886ee375`。
