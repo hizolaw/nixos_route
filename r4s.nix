@@ -40,6 +40,31 @@ let
       sleep 1
     done
   '';
+
+  # systemd generator: run as early as possible and dump the kernel log (which,
+  # with systemd.log_target=kmsg, contains systemd's own early-boot messages)
+  # plus the mount table to the FAT /boot partition, so a crash before sysinit
+  # can be read back from the SD card without a serial console.
+  r4sGenScript = pkgs.writeShellScript "r4s-gen-dmesg" ''
+    export PATH=${pkgs.util-linux}/bin:${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin:$PATH
+    mkdir -p /run/r4s-gen
+    for i in 1 2 3 4 5 6 7 8 9 10; do
+      if mount -t vfat /dev/mmcblk1p1 /run/r4s-gen 2>/dev/null; then
+        {
+          echo "=== r4s generator $(date -Is 2>/dev/null || echo n/a) ==="
+          echo "--- dmesg tail ---"
+          dmesg 2>/dev/null | tail -140
+          echo "--- mounts ---"
+          mount 2>/dev/null | grep -E "mmcblk|overlay|/boot|/nix|/proc|/sys|/dev|/run|cgroup"
+        } > /run/r4s-gen/gen-dmesg.txt 2>&1
+        sync
+        umount /run/r4s-gen
+        break
+      fi
+      sleep 1
+    done
+    exit 0
+  '';
 in
 {
   imports = [
@@ -128,6 +153,11 @@ in
       RestartSec = "1";
     };
   };
+
+  # Dump the kernel log (which includes systemd's kmsg output) from a systemd
+  # *generator* — this runs before any unit, so it catches crashes that happen
+  # during early boot / generator / unit-loading, before sysinit.target.
+  systemd.generators.r4s-dmesg = r4sGenScript;
 
   # Capture how far systemd gets before the board dies.  Writes a marker +
   # dmesg + mount/cgroup state to the FAT /boot partition as early as sysinit,

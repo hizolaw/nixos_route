@@ -190,3 +190,12 @@ ${rootmnt}/dev` 因为 NixOS 根只有 /nix（没有 /dev 目录）而失败，�
 - exec 那行 stdin 改成 `</dev/null`（不依赖新根的 /dev/console）。
 
 镜像 `nixos-r4s-sd-diag.img` sha256 `77f6ca9a9298ff06ef26b4042b2a7abb3127acb8ccb6a79a2c22b389886ee375`。
+
+## systemd 起来了，卡在 machine-id 之后 / activation 之前
+
+读卡确认 systemd 已挂载 /proc /sys /dev /run，写了 /etc/machine-id，但
+/etc/os-release、/var 还没有 → 崩在 generator / 早期 unit / sysinit 之前。
+加 systemd generator `r4s-dmesg`：开机最早期把 dmesg（含 systemd kmsg 输出）
+和 mount 表落到 FAT 的 /boot/gen-dmesg.txt。
+
+镜像 `nixos-r4s-sd-diag.img` sha256 `b343029ead68d597422a614dd39c67e432d9036d1ff984148af52231c950ed7e`。
