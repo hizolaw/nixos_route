@@ -41,6 +41,164 @@ let
     done
   '';
 
+  # Browser code cannot override the User-Agent header.  Some subscription
+  # servers return an empty response unless it identifies as a Clash client,
+  # so provide a LAN-only relay for dashboard subscription imports.
+  # Usage: http://192.168.1.5:18080/http://provider.example/subscribe?token=...
+  subscriptionRelay = pkgs.writeText "mihomo-subscription-relay.py" ''
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from urllib.error import HTTPError, URLError
+    from urllib.request import Request, urlopen
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_OPTIONS(self):
+            self.send_response(204)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+            self.end_headers()
+
+        def do_GET(self):
+            target = self.path.lstrip("/")
+            if not target.startswith(("http://", "https://")):
+                self.send_error(400, "prefix the subscription URL with this relay URL")
+                return
+            try:
+                request = Request(target, headers={"User-Agent": "clash.meta"})
+                with urlopen(request, timeout=30) as upstream:
+                    body = upstream.read()
+                    self.send_response(upstream.status)
+                    for name in ("Content-Type", "Content-Disposition",
+                                 "Subscription-Userinfo", "Profile-Update-Interval"):
+                        value = upstream.headers.get(name)
+                        if value:
+                            self.send_header(name, value)
+                    self.send_header("Content-Length", str(len(body)))
+                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self.end_headers()
+                    self.wfile.write(body)
+            except HTTPError as error:
+                self.send_error(error.code, str(error.reason))
+            except (URLError, TimeoutError, ValueError) as error:
+                self.send_error(502, str(error))
+
+        def log_message(self, format, *args):
+            print("%s - %s" % (self.client_address[0], format % args), flush=True)
+
+    ThreadingHTTPServer(("192.168.1.5", 18080), Handler).serve_forever()
+  '';
+
+  metacubexdServer = import ./metacubexd-server.nix { inherit pkgs; };
+
+  # Seed a persistent MetaCubeXD merge overlay for router-specific settings.
+  # It is deliberately created only once: after that the dashboard owns the
+  # profile, so edits made in the UI are never reverted on service restart.
+  routerLocalOverlay = pkgs.writeText "metacubexd-router-local.yaml" ''
+    allow-lan: true
+    bind-address: "*"
+    # Keep IPv6 support in mihomo, but do not hand AAAA answers to LAN clients.
+    # Their IPv6 default route is advertised by the upstream router and would
+    # otherwise bypass this IPv4 side-router entirely.
+    ipv6: true
+    tun:
+      enable: true
+      stack: system
+      auto-route: true
+      auto-detect-interface: true
+      dns-hijack:
+        - any:53
+    dns:
+      enable: true
+      listen: 0.0.0.0:53
+      ipv6: false
+  '';
+
+  prepareMetacubexd = pkgs.writeShellScript "prepare-metacubexd" ''
+    set -eu
+    install -d -m 0700 /var/lib/metacubexd/profiles
+    if [ ! -s /var/lib/metacubexd/environment ]; then
+      umask 077
+      control_token="$(${pkgs.coreutils}/bin/head -c 32 /dev/urandom | ${pkgs.coreutils}/bin/base64 | ${pkgs.coreutils}/bin/tr -d '\n=')"
+      clash_secret="$(${pkgs.coreutils}/bin/head -c 32 /dev/urandom | ${pkgs.coreutils}/bin/base64 | ${pkgs.coreutils}/bin/tr -d '\n=')"
+      {
+        echo "CONTROL_TOKEN=$control_token"
+        echo "CLASH_SECRET=$clash_secret"
+      } > /var/lib/metacubexd/environment
+      chmod 0600 /var/lib/metacubexd/environment
+    fi
+    if [ ! -s /var/lib/metacubexd/active.yaml ]; then
+      install -m 0600 ${./mihomo-config.yaml} /var/lib/metacubexd/active.yaml
+    fi
+
+    overlay_id="00000000-0000-4000-8000-000000000005"
+    overlay_path="/var/lib/metacubexd/profiles/$overlay_id.yaml"
+    index_path="/var/lib/metacubexd/profiles/index.json"
+    [ -s "$index_path" ] || echo '[]' > "$index_path"
+    if ! ${pkgs.jq}/bin/jq -e \
+      '.[] | select(.type == "merge" and .name == "router-local")' \
+      "$index_path" >/dev/null; then
+      install -m 0600 ${routerLocalOverlay} "$overlay_path"
+      tmp="$(${pkgs.coreutils}/bin/mktemp /var/lib/metacubexd/profiles/index.json.XXXXXX)"
+      ${pkgs.jq}/bin/jq \
+        --arg id "$overlay_id" \
+        '. + [{id: $id, name: "router-local", type: "merge", enabled: true}]' \
+        "$index_path" > "$tmp"
+      chmod 0600 "$tmp"
+      mv "$tmp" "$index_path"
+      touch /var/lib/metacubexd/.router-local-needs-apply
+    fi
+  '';
+
+  applyMetacubexdSeed = pkgs.writeShellScript "apply-metacubexd-seed" ''
+    set -eu
+    marker=/var/lib/metacubexd/.router-local-needs-apply
+    [ -e "$marker" ] || exit 0
+
+    # The overlay will be picked up on the first future activation even when
+    # no base profile exists yet.  If one is active already, recompose it now.
+    active_id="$(${pkgs.jq}/bin/jq -r '.activeId // empty' \
+      /var/lib/metacubexd/profiles/state.json 2>/dev/null || true)"
+    if [ -n "$active_id" ]; then
+      control_token="$(${pkgs.gnused}/bin/sed -n 's/^CONTROL_TOKEN=//p' \
+        /var/lib/metacubexd/environment)"
+      attempt=0
+      until ${pkgs.curl}/bin/curl --fail --silent --show-error \
+        -X POST -H "Authorization: Bearer $control_token" \
+        "http://127.0.0.1:8080/api/control/profiles/$active_id/activate" \
+        >/dev/null; do
+        attempt=$((attempt + 1))
+        [ "$attempt" -lt 30 ] || exit 1
+        sleep 1
+      done
+    fi
+    rm -f "$marker"
+  '';
+
+  startMetacubexd = pkgs.writeShellScript "start-metacubexd" ''
+    set -a
+    . /var/lib/metacubexd/environment
+    set +a
+    exec ${metacubexdServer}/bin/metacubexd-server
+  '';
+
+  updateBootScript = pkgs.writeShellScript "update-r4s-boot-script" ''
+    set -eu
+    system_path="$(${pkgs.coreutils}/bin/readlink -f /nix/var/nix/profiles/system)"
+    cmd="$(${pkgs.coreutils}/bin/mktemp)"
+    image="$(${pkgs.coreutils}/bin/mktemp)"
+    trap '${pkgs.coreutils}/bin/rm -f "$cmd" "$image"' EXIT
+    ${pkgs.coreutils}/bin/cat > "$cmd" <<EOF
+setenv bootargs "console=ttyS2,1500000 net.ifnames=0 root=/dev/mmcblk1p2 rootfstype=ext4 init=$system_path/init watchdog.handle_boot_enabled=1 cgroup_enable=cpuset cgroup_memory=1 cgroup_enable=memory swapaccount=1"
+load mmc 1:1 \''${kernel_addr_r} bsp/Image
+load mmc 1:1 \''${ramdisk_addr_r} bsp/ramdisk.gz
+setenv ramdisk_size \''${filesize}
+load mmc 1:1 \''${fdt_addr_r} bsp/rk3399-nanopi-r4s.dtb
+booti \''${kernel_addr_r} \''${ramdisk_addr_r}:\''${ramdisk_size} \''${fdt_addr_r}
+EOF
+    ${pkgs.ubootTools}/bin/mkimage -A arm -O linux -T script -C none \
+      -n "NixOS R4S BSP boot" -d "$cmd" "$image"
+    ${pkgs.coreutils}/bin/install -m 0755 "$image" /boot/boot.scr
+  '';
+
 in
 {
   imports = [
@@ -119,6 +277,68 @@ in
     };
   };
 
+  systemd.services.mihomo-subscription-relay = {
+    description = "LAN subscription relay with a Clash-compatible User-Agent";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    serviceConfig = {
+      ExecStart = "${pkgs.python3}/bin/python3 ${subscriptionRelay}";
+      DynamicUser = true;
+      Restart = "on-failure";
+      RestartSec = "2s";
+      NoNewPrivileges = true;
+      PrivateTmp = true;
+      ProtectSystem = "strict";
+      ProtectHome = true;
+      RestrictAddressFamilies = [ "AF_INET" "AF_INET6" ];
+    };
+  };
+
+  systemd.services.metacubexd = {
+    description = "MetaCubeXD profile manager and Mihomo supervisor";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    serviceConfig = {
+      Type = "simple";
+      ExecStartPre = prepareMetacubexd;
+      ExecStart = startMetacubexd;
+      ExecStartPost = applyMetacubexdSeed;
+      Environment = [
+        "PORT=8080"
+        "CONTROL_PORT=8080"
+        "CLASH_API_PORT=9090"
+        "MIXED_PORT=7890"
+        "DATA_DIR=/var/lib/metacubexd"
+        "DEFAULT_BACKEND_URL=http://192.168.1.5:9090"
+        "TZ=Asia/Shanghai"
+      ];
+      AmbientCapabilities = [ "CAP_NET_ADMIN" "CAP_NET_BIND_SERVICE" ];
+      CapabilityBoundingSet = [ "CAP_NET_ADMIN" "CAP_NET_BIND_SERVICE" ];
+      Restart = "on-failure";
+      RestartSec = "2s";
+      NoNewPrivileges = true;
+      PrivateTmp = true;
+      ProtectSystem = "strict";
+      ProtectHome = true;
+      StateDirectory = "metacubexd";
+      StateDirectoryMode = "0700";
+      ReadWritePaths = [ "/var/lib/metacubexd" ];
+      RestrictAddressFamilies = [ "AF_INET" "AF_INET6" "AF_NETLINK" ];
+    };
+  };
+
+  systemd.services.r4s-boot-script = {
+    description = "Keep the R4S U-Boot script on the current NixOS profile";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "boot.mount" ];
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = updateBootScript;
+    };
+  };
+
   # Persist the journal so a crash can be diagnosed from the SD card.
   services.journald.storage = "persistent";
 
@@ -171,30 +391,9 @@ in
   # 开启 IPv4 转发，让其它机器经本机路由上网
   boot.kernel.sysctl."net.ipv4.ip_forward" = 1;
 
-  # Clash (mihomo) 旁路由透明代理。Dashboard 用在线版 metacubexd：
-  #   https://d.metacubex.one  （后端填 http://192.168.1.5:9090）
-  services.mihomo = {
-    enable = true;
-    tunMode = true;
-    configFile = ./mihomo-config.yaml;
-    webui = pkgs.fetchzip {
-      url = "https://github.com/MetaCubeX/metacubexd/releases/download/v1.273.1/compressed-dist.tgz";
-      hash = "sha256-ysvgVbBuQlgJxcKOY3cDk4pIdGtMGZjmPX6VWOlBlH4=";
-      stripRoot = false;
-    };
-  };
-
-  # mihomo 内置 DNS 监听 0.0.0.0:53，需要允许绑定特权端口
-  systemd.services.mihomo.serviceConfig = {
-    AmbientCapabilities = lib.mkForce [
-      "CAP_NET_ADMIN"
-      "CAP_NET_BIND_SERVICE"
-    ];
-    CapabilityBoundingSet = lib.mkForce [
-      "CAP_NET_ADMIN"
-      "CAP_NET_BIND_SERVICE"
-    ];
-  };
+  # MetaCubeXD Server owns the mihomo process and persists profiles, schedules,
+  # active configuration and caches under /var/lib/metacubexd.
+  services.mihomo.enable = false;
 
   # ---------------------------------------------------------- users / ssh
   services.openssh = {

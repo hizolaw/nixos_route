@@ -39,10 +39,9 @@ tun:
   auto-route: true
   auto-detect-interface: true
 
-# TODO: 在这里填你的订阅节点，或通过 Dashboard 导入
+# Subscriptions are intentionally managed through the dashboard and are not
+# pinned in this repository.
 proxies: []
-
-# 首次先空着，代理节点和分组通过 Dashboard（metacubexd）导入/添加即可。
 proxy-groups: []
 
 rules:
