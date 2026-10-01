@@ -184,6 +184,18 @@ in
     };
   };
 
+  # mihomo 内置 DNS 监听 0.0.0.0:53，需要允许绑定特权端口
+  systemd.services.mihomo.serviceConfig = {
+    AmbientCapabilities = lib.mkForce [
+      "CAP_NET_ADMIN"
+      "CAP_NET_BIND_SERVICE"
+    ];
+    CapabilityBoundingSet = lib.mkForce [
+      "CAP_NET_ADMIN"
+      "CAP_NET_BIND_SERVICE"
+    ];
+  };
+
   # ---------------------------------------------------------- users / ssh
   services.openssh = {
     enable = true;
