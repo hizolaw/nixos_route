@@ -102,7 +102,7 @@ R4S 的引导安装接口会随 rebuild 更新 boot.scr；这不负责更换已�
 ## GitHub Actions 镜像构建
 
 工作流为 `.github/workflows/image.yml`（Actions → **Build R4S image**）。
-相关源码推送到 `main`、`ci/github-image` 或提交 PR 时自动构建，也可以通过 **Run workflow** 手动触发。
+仅通过 **Run workflow** 选择分支后手动触发；push 和 PR 均不自动构建。
 手动入口需要该 workflow 先进入默认分支。使用 GitHub 原生 `ubuntu-24.04-arm`
 runner，不依赖 Mac、在线 R4S、容器或额外的私有缓存密钥；仓库/套餐必须支持该 runner。
 

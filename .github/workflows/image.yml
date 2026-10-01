@@ -2,31 +2,6 @@ name: Build R4S image
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main, ci/github-image]
-    paths:
-      - '.github/workflows/image.yml'
-      - 'flake.*'
-      - 'hosts/**'
-      - 'hardware/**'
-      - 'modules/**'
-      - 'profiles/**'
-      - 'images/**'
-      - 'packages/**'
-      - 'scripts/*.sh'
-      - 'justfile'
-  pull_request:
-    paths:
-      - '.github/workflows/image.yml'
-      - 'flake.*'
-      - 'hosts/**'
-      - 'hardware/**'
-      - 'modules/**'
-      - 'profiles/**'
-      - 'images/**'
-      - 'packages/**'
-      - 'scripts/*.sh'
-      - 'justfile'
 
 permissions:
   contents: read
