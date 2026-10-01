@@ -7,7 +7,7 @@
 *.squashfs
 *.cpio
 *.gz
-!metacubexd-server-dist-v1.273.1.tar.gz
+!packages/metacubexd/metacubexd-server-dist-v1.273.1.tar.gz
 *.ko
 
 # 大型二进制的设备树 / 内核
@@ -15,6 +15,10 @@
 
 # 指向 /nix/store 的构建产物软链
 /result
+/result-*
+/assets/
+/out/
+*.log
 /uboot-r4s-rkbin
 /uboot2022-sandbox
 

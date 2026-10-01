@@ -1,7 +1,7 @@
 # mihomo (Clash.Meta) 配置模板 —— 旁路由透明代理用。
 #
-# 首次使用：把 `proxies` 换成你自己的订阅节点，或在 Web Dashboard 里导入订阅。
-# Dashboard: https://d.metacubex.one  （后端填 http://192.168.1.5:9090）
+# 首次启动的直连配置；通过 MetaCubeXD Server WebUI 导入订阅。
+# API 地址、secret 和 mixed port 由服务端管理。
 
 mixed-port: 7890
 allow-lan: true
