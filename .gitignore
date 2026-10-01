@@ -8,7 +8,6 @@
 *.cpio
 *.gz
 !packages/metacubexd/metacubexd-server-dist-v1.273.1.tar.gz
-!hardware/nanopi-r4s-ddr3/bsp-assets.tar.gz
 *.ko
 
 # 大型二进制的设备树 / 内核

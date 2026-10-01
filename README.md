@@ -28,7 +28,7 @@ x86_64 提供移植入口说明，尚未提供可刷写镜像或实机保证。�
 
 Flake 锁定当前已使用的 NixOS 24.05 revision，升级 nixpkgs 单独验证；这是兼容性基线，并非当前受支持的安全更新分支。1GB R4S 上完整求值/构建可能耗尽可用内存，建议在有充足内存的 ARM64 builder 上构建，再安排部署；不要在承担网络出口的设备上并发重构构建。
 
-R4S 的已验证 BSP 保存在 `hardware/nanopi-r4s-ddr3/bsp-assets.tar.gz`，通过 Git LFS 下载。包含内核、修改版 initramfs、DTB、内核模块与原卡 bootloader。不要用未经修改的 FriendlyWrt initramfs 替代。
+R4S 的已验证 BSP 保存在 `hardware/nanopi-r4s-ddr3/bsp-assets.tar.xz`，使用 `xz -9e` 压缩，通过 Git LFS 下载。解包需要支持 xz 的 tar 和 xz 工具。包含内核、修改版 initramfs、DTB、内核模块与原卡 bootloader。不要用未经修改的 FriendlyWrt initramfs 替代。
 
 ```text
 assets/r4s/
