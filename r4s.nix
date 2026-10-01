@@ -69,11 +69,6 @@ in
     "net.ifnames=0"
   ];
 
-  # The PCIe RTL8111H (r8169) crashes this BSP 6.6 kernel when its module is
-  # loaded (modprobe r8169 hard-hangs the board), so the LAN port cannot be
-  # used.  Keep it blacklisted and only use the native GMAC (eth0).
-  boot.blacklistedKernelModules = [ "r8169" ];
-
   # bcache-tools ships a udev rule referencing /bin/sh, which trips NixOS 24.05's
   # udev sanity check.  The R4S doesn't use bcache, so drop it entirely.
   boot.bcache.enable = false;
@@ -141,8 +136,9 @@ in
   };
 
   # -------------------------------------------------------------- network
-  # Only the native GMAC (eth0, WAN port) with a static address.  The PCIe NIC
-  # (r8169) is blacklisted above.
+  # eth0 = native GMAC (WAN), static on the upstream 192.168.1.0/24 network.
+  # eth1 = PCIe RTL8111H (LAN), its own 192.168.2.0/24 subnet.  The RTL8111H
+  # cannot read its MAC from hardware on this board, so pin a stable one.
   networking = {
     hostName = "r4s";
     useDHCP = false;
@@ -152,6 +148,16 @@ in
       ipv4.addresses = [
         {
           address = "192.168.1.5";
+          prefixLength = 24;
+        }
+      ];
+    };
+    interfaces.eth1 = {
+      useDHCP = false;
+      macAddress = "a2:fe:c3:06:8f:79";
+      ipv4.addresses = [
+        {
+          address = "192.168.2.1";
           prefixLength = 24;
         }
       ];
