@@ -229,3 +229,12 @@ ping 通、SSH 通（root@192.168.1.5）。确认：
 结论：1G DDR3 的 R4S 走「rkbin DDR + OpenWrt U-Boot + BSP 内核 + FriendlyWrt
 initramfs + NixOS 24.05(systemd 255.9)」可稳定启动。systemd 260(26.05) 才是
 不兼容的源头。
+
+## 清理成正式可用版
+
+去掉 r4s-diag / r4s-pstore / r4s-early-log / r4s-dmesg generator / ramoops /
+oops=panic 等诊断；initramfs 只留「喂狗 + 跳过 resize + 补 /dev + 原始 exec」。
+新增 assemble.sh 一键拼引导器 + 格式化 FAT + 塞 BSP 文件。产出
+nixos-r4s-sd.img。
+
+正式镜像 sha256 `bbc179167bcd6d8aadc5d25ac189aedacd0957fb11451bb3eede20a4f7776e90`。

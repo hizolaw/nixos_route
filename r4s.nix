@@ -41,30 +41,6 @@ let
     done
   '';
 
-  # systemd generator: run as early as possible and dump the kernel log (which,
-  # with systemd.log_target=kmsg, contains systemd's own early-boot messages)
-  # plus the mount table to the FAT /boot partition, so a crash before sysinit
-  # can be read back from the SD card without a serial console.
-  r4sGenScript = pkgs.writeShellScript "r4s-gen-dmesg" ''
-    export PATH=${pkgs.util-linux}/bin:${pkgs.coreutils}/bin:${pkgs.gnugrep}/bin:$PATH
-    mkdir -p /run/r4s-gen
-    for i in 1 2 3 4 5 6 7 8 9 10; do
-      if mount -t vfat /dev/mmcblk1p1 /run/r4s-gen 2>/dev/null; then
-        {
-          echo "=== r4s generator $(date -Is 2>/dev/null || echo n/a) ==="
-          echo "--- dmesg tail ---"
-          dmesg 2>/dev/null | tail -140
-          echo "--- mounts ---"
-          mount 2>/dev/null | grep -E "mmcblk|overlay|/boot|/nix|/proc|/sys|/dev|/run|cgroup"
-        } > /run/r4s-gen/gen-dmesg.txt 2>&1
-        sync
-        umount /run/r4s-gen
-        break
-      fi
-      sleep 1
-    done
-    exit 0
-  '';
 in
 {
   imports = [
@@ -86,24 +62,16 @@ in
     ln -sfn ${bspModules}/lib/modules/6.6.134+ /lib/modules/6.6.134+
   '';
 
-  # R4S debug UART: ttyS2 @ 1500000 8N1.
-  # (mkForce drops the aarch64 sd-image defaults for ttyS0/ttyAMA0/tty0, so
-  # any other kernel parameter has to be listed here explicitly -- including
-  # net.ifnames=0 from networking.usePredictableInterfaceNames below.)
+  # R4S debug UART: ttyS2 @ 1500000 8N1.  net.ifnames=0 keeps the native GMAC
+  # named eth0 (see networking.usePredictableInterfaceNames below).
   boot.kernelParams = lib.mkForce [
     "console=ttyS2,1500000n8"
     "net.ifnames=0"
-    "oops=panic"
-    "panic=10"
-    "ramoops.mem_address=0x20000000"
-    "ramoops.mem_size=0x100000"
-    "ramoops.record_size=0x20000"
-    "ramoops.console_size=0x80000"
   ];
 
-  # The PCIe RTL8111H (r8169) is a prime crash suspect on this BSP kernel.
-  # For diagnosis, keep it out of the picture entirely: only the native
-  # GMAC (eth0) is used.
+  # The PCIe RTL8111H (r8169) was a crash suspect on this BSP kernel; keep it
+  # out of the picture until it is re-tested.  Only the native GMAC (eth0) is
+  # used.
   boot.blacklistedKernelModules = [ "r8169" ];
 
   # bcache-tools ships a udev rule referencing /bin/sh, which trips NixOS 24.05's
@@ -156,43 +124,6 @@ in
     };
   };
 
-  # Dump the kernel log (which includes systemd's kmsg output) from a systemd
-  # *generator* — this runs before any unit, so it catches crashes that happen
-  # during early boot / generator / unit-loading, before sysinit.target.
-  systemd.generators.r4s-dmesg = r4sGenScript;
-
-  # Capture how far systemd gets before the board dies.  Writes a marker +
-  # dmesg + mount/cgroup state to the FAT /boot partition as early as sysinit,
-  # so the failure point can be read back from the SD card without a UART.
-  systemd.services.r4s-early-log = {
-    description = "Write early-boot diagnostic to /boot";
-    wantedBy = [ "multi-user.target" ];
-    before = [ "multi-user.target" ];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-    };
-    script = ''
-      mkdir -p /run/earlymnt
-      if mount -t vfat /dev/mmcblk1p1 /run/earlymnt 2>/dev/null; then
-        {
-          echo "=== r4s-early-log ==="
-          echo "systemd reached sysinit"
-          echo "--- dmesg tail ---"
-          dmesg | tail -80
-          echo "--- systemd units failed ---"
-          systemctl --no-pager list-units --state=failed 2>&1 | head -20
-          echo "--- mounts ---"
-          mount | grep -E "mmcblk|overlay|/boot|/nix" | head -20
-          echo "--- cgroup ---"
-          ls -la /sys/fs/cgroup 2>/dev/null
-        } > /run/earlymnt/early-log.txt 2>&1
-        sync
-        umount /run/earlymnt
-      fi
-    '';
-  };
-
   # Persist the journal so a crash can be diagnosed from the SD card.
   services.journald.storage = "persistent";
 
@@ -232,57 +163,6 @@ in
       "119.29.29.29"
     ];
     firewall.enable = true;
-  };
-
-  # Boot-time network diagnostic written to the FAT /boot partition so it
-  # can be read back from the SD card (mtools) without a serial console.
-  systemd.services.r4s-diag = {
-    wantedBy = [ "multi-user.target" ];
-    path = with pkgs; [ iproute2 bridge-utils util-linux systemd ];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-    };
-    script = ''
-      exec > /boot/r4s-diag.txt 2>&1
-      echo "=== r4s-diag $(date -Is) ==="
-      uname -a
-      echo "--- net modules ---"
-      grep -iE "r8169|stmmac|dwmac|realtek" /proc/modules
-      echo "--- /sys/class/net ---"
-      ls -l /sys/class/net
-      echo "--- ip link ---"
-      ip link
-      echo "--- ip addr ---"
-      ip addr
-      echo "--- ip route ---"
-      ip route
-      echo "--- bridge ---"
-      brctl show 2>&1
-      echo "--- network units ---"
-      systemctl --no-pager status network-setup.service 2>&1 | head -30
-      echo "--- boot journal (tail) ---"
-      journalctl -b --no-pager -n 80 2>&1
-      sync
-    '';
-  };
-
-  # Dump the previous boot's pstore/ramoops console to the FAT /boot partition
-  # so a crash can be read back from the SD card without a serial console.
-  systemd.services.r4s-pstore = {
-    wantedBy = [ "multi-user.target" ];
-    before = [ "multi-user.target" ];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-    };
-    script = ''
-      if [ -d /sys/fs/pstore ]; then
-        mkdir -p /boot/pstore
-        cp -a /sys/fs/pstore/. /boot/pstore/ 2>/dev/null || true
-        sync
-      fi
-    '';
   };
 
   # ---------------------------------------------------------- users / ssh
