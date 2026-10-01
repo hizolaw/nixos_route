@@ -48,4 +48,4 @@ rollback:
     sudo nixos-rebuild switch --rollback
 
 status:
-    systemctl status metacubexd mihomo-subscription-relay --no-pager
+    systemctl status metacubexd mihomo-subscription-relay udpxy --no-pager

@@ -129,6 +129,15 @@ CI 不刷写、不部署、不发布 Release；构建成功不等于实机启动
 
 ## 服务与配置归属
 
+R4S 启用原生 udpxy，状态页为 `http://192.168.1.5:4022/status`。
+例如组播源 `udp://239.1.2.3:1234` 对应播放地址
+`http://192.168.1.5:4022/udp/239.1.2.3:1234`（示例地址，不代表实际频道）。
+物理 WAN 为 eth0，但当前桥接在 br0，因此组播接收接口配置为 br0。
+不改变网桥、路由或 mihomo 配置；上游必须允许 IGMP 并提供对应组播。
+服务无身份认证，仅限可信 LAN。若以后开启防火墙，需另行放行 LAN HTTP 与所需组播流量。
+独立选项为 `router.udpxy.{enable,listenAddress,multicastInterface,port,maxClients}`；
+在主机配置设置 `router.udpxy.enable = false` 即可关闭。`just status` 包含该服务。
+
 默认 WebUI：`http://192.168.1.5:8080`，mihomo API 9090，mixed 7890。手机 IPv4 网关与 DNS 都设为 `192.168.1.5`。
 
 Nix 管服务和软件版本；订阅地址、节点、分流和自动更新由 WebUI 管理，持久化在 `/var/lib/metacubexd/`。secret 在首次启动生成，不存储到仓库。

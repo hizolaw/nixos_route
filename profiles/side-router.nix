@@ -5,6 +5,7 @@
     ../modules/networking/side-router.nix
     ../modules/services/metacubexd.nix
     ../modules/services/subscription-relay.nix
+    ../modules/services/udpxy.nix
   ];
   router.network.enable = lib.mkDefault true;
   router.metacubexd = {
