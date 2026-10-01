@@ -1,0 +1,91 @@
+name: Build R4S image
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, ci/github-image]
+    paths:
+      - '.github/workflows/image.yml'
+      - 'flake.*'
+      - 'hosts/**'
+      - 'hardware/**'
+      - 'modules/**'
+      - 'profiles/**'
+      - 'images/**'
+      - 'packages/**'
+      - 'scripts/*.sh'
+      - 'justfile'
+  pull_request:
+    paths:
+      - '.github/workflows/image.yml'
+      - 'flake.*'
+      - 'hosts/**'
+      - 'hardware/**'
+      - 'modules/**'
+      - 'profiles/**'
+      - 'images/**'
+      - 'packages/**'
+      - 'scripts/*.sh'
+      - 'justfile'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: r4s-image-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  image:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout source and BSP assets
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          lfs: true
+          persist-credentials: false
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@b85815f71a6de0ddee80b8a80a98d43f4bcc66c7 # v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            max-jobs = 2
+            cores = 2
+
+      - name: Prepare assets, evaluate and build image
+        run: |
+          test "$(uname -m)" = aarch64
+          nixpkgs_rev=$(jq -r '.nodes.nixpkgs.locked.rev' flake.lock)
+          nix shell "github:NixOS/nixpkgs/$nixpkgs_rev#just" -c just ci-image
+
+      - name: Compress image and generate checksums
+        run: |
+          shopt -s nullglob
+          images=(result-image/sd-image/*.img)
+          if (( ${#images[@]} != 1 )); then
+            echo "Expected exactly one SD image, found ${#images[@]}" >&2
+            exit 1
+          fi
+          mkdir -p out/ci
+          name="r4s-home-${GITHUB_SHA}.img"
+          sha256sum "${images[0]}" | awk -v name="$name" '{print $1 "  " name}' > out/ci/IMAGE.sha256
+          xz -T2 -6 -c "${images[0]}" > "out/ci/$name.xz"
+          xz -t "out/ci/$name.xz"
+          (cd out/ci && sha256sum "$name.xz" > SHA256SUMS)
+          printf 'Source: %s\nCommit: %s\nHost: r4s-home\nArchitecture: aarch64-linux\nBoot verification: not performed by CI\n' \
+            "$GITHUB_REPOSITORY" "$GITHUB_SHA" > out/ci/BUILD.txt
+
+      - name: Upload image
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: r4s-home-${{ github.sha }}
+          path: out/ci/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
