@@ -208,3 +208,12 @@ ${rootmnt}/dev` 因为 NixOS 根只有 /nix（没有 /dev 目录）而失败，�
 - 移除 26.05 专属的 sdImage.rootFilesystemCreator、fileSystems."/boot/firmware"。
 
 镜像 `nixos-r4s-sd-diag.img` sha256 `79b99d99ee04206d227897cba19ac9538d1c4b369fc817027cf8ce6441ce9444`。
+
+## 24.05 成功启动到 multi-user；修 watchdog-feed ordering + 去掉 eth0 MAC
+
+journal 确认 systemd 255.9 起来到 multi-user（r4s-diag 跑起来了）。但
+watchdog-feed.service 因 ordering cycle 被删（没喂狗）、eth0 有 40-eth0.link
+unpredictable name 警告。修：wantedBy 改 multi-user、去掉 eth0 macAddress。
+另 24.05 sd-image 的 FAT 是空的，需手动 mkfs.vfat 后再 mcopy BSP 文件。
+
+镜像 `nixos-r4s-sd-diag.img` sha256 `9d27fb437fff0c3148feb21fedd2874645d9790836d9fc299a9cd505001fcdeb`。

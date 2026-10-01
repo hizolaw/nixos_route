@@ -4,7 +4,7 @@
 #
 # ramoops/pstore is enabled so that the previous boot's console + panic log
 # survives a reset and can be read back from the FAT /boot partition (no UART).
-setenv bootargs "console=ttyS2,1500000 net.ifnames=0 root=/dev/mmcblk1p2 rootfstype=ext4 init=/nix/store/vz1vkiazlls9qcvbhdr3mcfy5z92mjv3-nixos-system-r4s-24.05.7376.b134951a4c9f/init oops=panic panic=10 ramoops.mem_address=0x20000000 ramoops.mem_size=0x100000 ramoops.record_size=0x20000 ramoops.console_size=0x80000 watchdog.handle_boot_enabled=1"
+setenv bootargs "console=ttyS2,1500000 net.ifnames=0 root=/dev/mmcblk1p2 rootfstype=ext4 init=/nix/store/5x5vhmc68syvp50v372lsmyc6jm3nsas-nixos-system-r4s-24.05.7376.b134951a4c9f/init oops=panic panic=10 ramoops.mem_address=0x20000000 ramoops.mem_size=0x100000 ramoops.record_size=0x20000 ramoops.console_size=0x80000 watchdog.handle_boot_enabled=1"
 
 load mmc 1:1 ${kernel_addr_r} bsp/Image
 load mmc 1:1 ${ramdisk_addr_r} bsp/ramdisk.gz
