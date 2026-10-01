@@ -178,8 +178,8 @@ in
     tunMode = true;
     configFile = ./mihomo-config.yaml;
     webui = pkgs.fetchzip {
-      url = "https://github.com/metacubex/metacubexd/releases/latest/download/compressed-dist.tgz";
-      hash = "sha256-oXjgC2esq82i3O8Ar6kL5qe7Jh5Gamfa1YyEeNlVNgM=";
+      url = "https://github.com/MetaCubeX/metacubexd/releases/download/v1.273.1/compressed-dist.tgz";
+      hash = "sha256-ysvgVbBuQlgJxcKOY3cDk4pIdGtMGZjmPX6VWOlBlH4=";
       stripRoot = false;
     };
   };
