@@ -217,3 +217,15 @@ unpredictable name 警告。修：wantedBy 改 multi-user、去掉 eth0 macAddre
 另 24.05 sd-image 的 FAT 是空的，需手动 mkfs.vfat 后再 mcopy BSP 文件。
 
 镜像 `nixos-r4s-sd-diag.img` sha256 `9d27fb437fff0c3148feb21fedd2874645d9790836d9fc299a9cd505001fcdeb`。
+
+## ✅ 成功：NixOS 24.05 跑起来了
+
+ping 通、SSH 通（root@192.168.1.5）。确认：
+- 内核 BSP 6.6.134+，systemd 255.9（NixOS 24.05）；
+- eth0 UP 192.168.1.5/24，root 分区已扩容到 59G；
+- watchdog-feed.service active（看门狗有喂，不再复位）；
+- 唯一 failed 是 r4s-diag.service（首启 /boot 曾被 remount-ro，无碍）。
+
+结论：1G DDR3 的 R4S 走「rkbin DDR + OpenWrt U-Boot + BSP 内核 + FriendlyWrt
+initramfs + NixOS 24.05(systemd 255.9)」可稳定启动。systemd 260(26.05) 才是
+不兼容的源头。
