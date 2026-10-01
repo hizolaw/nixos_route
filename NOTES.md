@@ -238,3 +238,8 @@ oops=panic 等诊断；initramfs 只留「喂狗 + 跳过 resize + 补 /dev + �
 nixos-r4s-sd.img。
 
 正式镜像 sha256 `bbc179167bcd6d8aadc5d25ac189aedacd0957fb11451bb3eede20a4f7776e90`。
+
+## LAN 口（r8169）实测：挂死内核
+
+板上 `modprobe r8169` 直接 kernel hang → 看门狗复位。确认 BSP 6.6 内核 + r8169
+在这个 1G DDR3 R4S 上不可用。已恢复 r8169 黑名单、去掉 eth1，只保留 eth0 单口。
