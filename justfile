@@ -5,7 +5,7 @@ export ROUTER_ASSETS := env_var_or_default("ROUTER_ASSETS", justfile_directory()
 default:
     @just --list
 
-# Prepare local vendor assets from the existing checkout (not downloaded).
+# Extract and verify the vendor asset archive downloaded by Git LFS.
 assets-prepare:
     bash scripts/prepare-assets.sh
 

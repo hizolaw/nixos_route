@@ -2,8 +2,8 @@
   description = "Modular NixOS router: runtime configurations and board images";
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/b134951a4c9f3c995fd7be05f3243f8ecd65d798";
   outputs = { self, nixpkgs }: let
-    # Vendor assets are deliberately outside the Git/flake source. They must
-    # be supplied explicitly until a redistributable upstream source is pinned.
+    # Extract the Git LFS archive with `just assets-prepare` before evaluation.
+    # The extracted asset directory is supplied explicitly, outside flake source.
     assetsEnv = builtins.getEnv "ROUTER_ASSETS";
     routerAssets = if assetsEnv == "" then
       throw "Set ROUTER_ASSETS to the absolute BSP asset directory; see just assets-check and README.md"

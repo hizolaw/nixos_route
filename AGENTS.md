@@ -22,7 +22,8 @@ Do not introduce periodic PATCH jobs or overwrite UI edits at startup.
 Do not enable Docker/Podman for this deployment.
 Preserve hardware-specific BSP and watchdog workarounds. Do not silently replace
 them with a mainline kernel, a generic R4S DTB or another board's bootloader.
-Keep large assets and build outputs out of Git; verify assets before use.
+Store the approved R4S BSP archive through Git LFS, never as a regular Git blob.
+Keep extracted assets and build outputs out of Git; verify assets before use.
 
 ## Verification and deployment
 

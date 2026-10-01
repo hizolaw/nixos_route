@@ -28,7 +28,7 @@ x86_64 提供移植入口说明，尚未提供可刷写镜像或实机保证。�
 
 Flake 锁定当前已使用的 NixOS 24.05 revision，升级 nixpkgs 单独验证；这是兼容性基线，并非当前受支持的安全更新分支。1GB R4S 上完整求值/构建可能耗尽可用内存，建议在有充足内存的 ARM64 builder 上构建，再安排部署；不要在承担网络出口的设备上并发重构构建。
 
-R4S 的专用 BSP 尚无完整自动下载链。新 checkout 需要从维护者备份取得以下文件，并通过校验。不要用未经修改的 FriendlyWrt initramfs 替代。
+R4S 的已验证 BSP 保存在 `hardware/nanopi-r4s-ddr3/bsp-assets.tar.gz`，通过 Git LFS 下载。包含内核、修改版 initramfs、DTB、内核模块与原卡 bootloader。不要用未经修改的 FriendlyWrt initramfs 替代。
 
 ```text
 assets/r4s/
@@ -39,14 +39,16 @@ assets/r4s/
   modules/6.6.134+/
 ```
 
-原工作区还保有 `ref-fw/` 和 `sd-bootloader-32MiB.bin` 时可执行：
+clone 后在仓库根目录执行（需要 Git LFS）：
 
 ```bash
+git lfs install
+git lfs pull
 just assets-prepare
 just assets-check
 ```
 
-资产也可以存放在其他位置：`export ROUTER_ASSETS=/absolute/path/to/r4s-assets`。它们不进 Git；just 会使用 `--impure` 显式读取该路径。资产会导入 Nix store，所以构建空间需充足。新设备应先修改 `hosts/r4s-home/default.nix` 中的 SSH 公钥、地址、网口和 MAC。
+解包目录也可以放在其他位置：`export ROUTER_ASSETS=/absolute/path/to/r4s-assets`。解包内容不进 Git；just 会使用 `--impure` 显式读取该路径。压缩包通过 LFS 管理，普通 Git blob 只包含指针。资产会导入 Nix store，所以构建空间需充足。新设备应先修改 `hosts/r4s-home/default.nix` 中的 SSH 公钥、地址、网口和 MAC。
 
 ## 常用命令
 
