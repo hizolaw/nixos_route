@@ -24,7 +24,7 @@ x86_64 提供移植入口说明，尚未提供可刷写镜像或实机保证。�
 
 ## 准备
 
-需要 Linux、Git、启用 `nix-command flakes` 的 Nix、just 和 GNU coreutils。构建 ARM64 软件需要 ARM64 构建机、Nix 远程 builder 或已配置的 binfmt/QEMU；`just` 不自动修改宿主机仿真设置。
+需要 Linux 或 macOS、Git、启用 `nix-command flakes` 的 Nix、just 和 GNU coreutils。构建 ARM64 软件需要 ARM64 Linux 构建机、Nix 远程 builder 或已配置的 binfmt/QEMU；`just` 不自动修改宿主机仿真设置。
 
 Flake 锁定当前已使用的 NixOS 24.05 revision，升级 nixpkgs 单独验证；这是兼容性基线，并非当前受支持的安全更新分支。1GB R4S 上完整求值/构建可能耗尽可用内存，建议在有充足内存的 ARM64 builder 上构建，再安排部署；不要在承担网络出口的设备上并发重构构建。
 
@@ -53,17 +53,24 @@ just assets-check
 ## 常用命令
 
 macOS 默认磁盘不区分大小写，不能直接解包 Linux 内核模块（例如
-`xt_DSCP.ko` 和 `xt_dscp.ko`）。使用区分大小写的 APFS 映像存放资产：
+`xt_DSCP.ko` 和 `xt_dscp.ko`）。因此使用区分大小写的 APFS 稀疏磁盘映像存放资产。
+这里的“资产卷”只是保存 BSP 内核、模块和 bootloader 的虚拟磁盘，不是容器，也不会给物理磁盘重新分区。
+
+Mac 上启用 nix-darwin Linux builder、安装 Git LFS 等上述依赖后，在仓库根目录直接执行：
 
 ```bash
-hdiutil create -size 2g -type SPARSE -fs 'Case-sensitive APFS' -volname R4SBuildAssets ~/Document/r4s-build-assets.sparseimage
-hdiutil attach ~/Document/r4s-build-assets.sparseimage -nobrowse
-export ROUTER_ASSETS=/Volumes/R4SBuildAssets/r4s
-just assets-prepare
+just image
 ```
 
-后续使用前重新挂载该映像并设置 `ROUTER_ASSETS`。Mac 需启用 nix-darwin
-Linux builder；必要时向 `nix build` 传入 `--builders @/etc/nix/machines`。
+`just image` 和 `just build` 会自动创建或挂载
+`~/Document/r4s-build-assets.sparseimage`，使用 `/Volumes/R4SBuildAssets/r4s`
+作为资产目录；资产缺失时拉取 LFS 压缩包并解包，已存在时只校验、不覆盖。
+映像容量上限为 2 GiB，宿主机文件按实际使用增长。已有映像会复用，重启 Mac 后也会自动重新挂载。
+构建自动传入 `--builders @/etc/nix/machines --max-jobs 0`，但不会自动安装或启用 Linux builder。
+Linux 默认使用仓库内 `assets/r4s`，不创建资产卷。
+
+可用 `just assets-mount` 单独挂载、`just assets-prepare` 单独准备资产。
+显式设置 `ROUTER_ASSETS` 为其他目录时，不再管理默认资产卷；调用者需确保目录所在文件系统区分大小写。
 
 ```bash
 just                   # 列出命令
@@ -91,6 +98,34 @@ sudo env ROUTER_ASSETS=/absolute/path/to/assets nixos-rebuild boot --impure --fl
 ```
 
 R4S 的引导安装接口会随 rebuild 更新 boot.scr；这不负责更换已有设备的 BSP 文件。系统回滚也不回滚 `/var/lib/metacubexd`，修改前应备份运行数据。旧命令 `-I nixos-config=./r4s.nix` 已由 Flake 入口替代。
+
+## GitHub Actions 镜像构建
+
+工作流为 `.github/workflows/image.yml`（Actions → **Build R4S image**）。
+相关源码推送到 `main`、`ci/github-image` 或提交 PR 时自动构建，也可以通过 **Run workflow** 手动触发。
+手动入口需要该 workflow 先进入默认分支。使用 GitHub 原生 `ubuntu-24.04-arm`
+runner，不依赖 Mac、在线 R4S、容器或额外的私有缓存密钥；仓库/套餐必须支持该 runner。
+
+CI 自动下载 Git LFS BSP 资产，使用 `flake.lock` 锁定的 Nixpkgs 提供 just，
+执行 `just ci-image`（准备并校验资产、求值、构建镜像）。本地也可用同一命令复现。
+GitHub LFS 配额或 runner 不可用时，任务会失败，不会跳过资产校验。
+
+完成后在对应运行的 **Artifacts** 下载 `r4s-home-<commit>`，保留 14 天。
+解开 GitHub 的下载包后包含 `.img.gz`、压缩包校验 `SHA256SUMS`、原始镜像校验
+`IMAGE.sha256` 和构建信息 `BUILD.txt`：
+
+```bash
+sha256sum -c SHA256SUMS
+gzip -dk r4s-home-<commit>.img.gz
+sha256sum -c IMAGE.sha256
+```
+
+CI 使用 `gzip -9 -n` 压缩镜像，只上传压缩文件与校验信息，不上传原始 `.img`。
+gzip 通常比 xz 体积更大；此格式选择主要方便解压，不保证比旧产物更小。
+
+这是 `r4s-home` 的设备镜像，包含仓库中的固定 IP、MAC、公钥和可信 LAN 配置，
+不是适合任意设备的通用固件。使用前检查 `hosts/r4s-home/default.nix`。
+CI 不刷写、不部署、不发布 Release；构建成功不等于实机启动验证通过。
 
 ## 服务与配置归属
 
