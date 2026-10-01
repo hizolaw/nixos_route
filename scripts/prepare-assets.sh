@@ -11,6 +11,15 @@ if [[ ! -s "$archive" ]] || head -c 100 "$archive" | grep -q 'version https://gi
 fi
 mkdir -p "$(dirname "$target")"
 staging=$(mktemp -d "$(dirname "$target")/.r4s-assets.XXXXXX")
+# Linux module names can differ only by case (xt_DSCP.ko / xt_dscp.ko).
+touch "$staging/.case-check"
+if [[ -e "$staging/.CASE-CHECK" ]]; then
+  rm "$staging/.case-check"
+  rmdir "$staging"
+  echo 'Use a case-sensitive filesystem for ROUTER_ASSETS; see README macOS instructions.' >&2
+  exit 1
+fi
+rm "$staging/.case-check"
 tar -xJf "$archive" -C "$staging"
 bash "$repo/scripts/check-assets.sh" "$staging"
 mv "$staging" "$target"

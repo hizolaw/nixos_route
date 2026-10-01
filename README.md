@@ -52,6 +52,19 @@ just assets-check
 
 ## 常用命令
 
+macOS 默认磁盘不区分大小写，不能直接解包 Linux 内核模块（例如
+`xt_DSCP.ko` 和 `xt_dscp.ko`）。使用区分大小写的 APFS 映像存放资产：
+
+```bash
+hdiutil create -size 2g -type SPARSE -fs 'Case-sensitive APFS' -volname R4SBuildAssets ~/Document/r4s-build-assets.sparseimage
+hdiutil attach ~/Document/r4s-build-assets.sparseimage -nobrowse
+export ROUTER_ASSETS=/Volumes/R4SBuildAssets/r4s
+just assets-prepare
+```
+
+后续使用前重新挂载该映像并设置 `ROUTER_ASSETS`。Mac 需启用 nix-darwin
+Linux builder；必要时向 `nix build` 传入 `--builders @/etc/nix/machines`。
+
 ```bash
 just                   # 列出命令
 just check             # 校验资产、评估系统与镜像、检查 diff
