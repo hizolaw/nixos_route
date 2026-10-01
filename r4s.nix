@@ -69,9 +69,9 @@ in
     "net.ifnames=0"
   ];
 
-  # The PCIe RTL8111H (r8169) was a crash suspect on this BSP kernel; keep it
-  # out of the picture until it is re-tested.  Only the native GMAC (eth0) is
-  # used.
+  # The PCIe RTL8111H (r8169) crashes this BSP 6.6 kernel when its module is
+  # loaded (modprobe r8169 hard-hangs the board), so the LAN port cannot be
+  # used.  Keep it blacklisted and only use the native GMAC (eth0).
   boot.blacklistedKernelModules = [ "r8169" ];
 
   # bcache-tools ships a udev rule referencing /bin/sh, which trips NixOS 24.05's
@@ -141,8 +141,8 @@ in
   };
 
   # -------------------------------------------------------------- network
-  # Minimal setup for diagnosis: only the native GMAC (eth0, WAN port) with a
-  # static address.  The PCIe NIC (r8169) is blacklisted above.
+  # Only the native GMAC (eth0, WAN port) with a static address.  The PCIe NIC
+  # (r8169) is blacklisted above.
   networking = {
     hostName = "r4s";
     useDHCP = false;
