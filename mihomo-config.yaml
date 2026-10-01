@@ -17,6 +17,7 @@ secret: ""
 tun:
   enable: true
   stack: system
+  dns-hijack: []
   auto-route: true
   auto-detect-interface: true
 
