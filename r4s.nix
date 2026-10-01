@@ -146,8 +146,8 @@ in
   # runtime watchdog is unreliable.  Feed it directly instead.
   systemd.services.watchdog-feed = {
     description = "Feed the RK3399 hardware watchdog";
-    wantedBy = [ "sysinit.target" ];
-    before = [ "sysinit.target" ];
+    wantedBy = [ "multi-user.target" ];
+    before = [ "multi-user.target" ];
     serviceConfig = {
       Type = "simple";
       ExecStart = "${watchdogFeedScript}";
@@ -166,9 +166,8 @@ in
   # so the failure point can be read back from the SD card without a UART.
   systemd.services.r4s-early-log = {
     description = "Write early-boot diagnostic to /boot";
-    wantedBy = [ "sysinit.target" ];
-    before = [ "sysinit.target" ];
-    after = [ "systemd-udevd.service" ];
+    wantedBy = [ "multi-user.target" ];
+    before = [ "multi-user.target" ];
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
@@ -219,7 +218,6 @@ in
     usePredictableInterfaceNames = false;
     interfaces.eth0 = {
       useDHCP = false;
-      macAddress = "a2:fe:c3:06:8f:78";
       ipv4.addresses = [
         {
           address = "192.168.1.5";
