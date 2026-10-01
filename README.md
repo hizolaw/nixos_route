@@ -111,14 +111,17 @@ CI 自动下载 Git LFS BSP 资产，使用 `flake.lock` 锁定的 Nixpkgs 提�
 GitHub LFS 配额或 runner 不可用时，任务会失败，不会跳过资产校验。
 
 完成后在对应运行的 **Artifacts** 下载 `r4s-home-<commit>`，保留 14 天。
-解开 GitHub 的下载包后包含 `.img.xz`、压缩包校验 `SHA256SUMS`、原始镜像校验
+解开 GitHub 的下载包后包含 `.img.gz`、压缩包校验 `SHA256SUMS`、原始镜像校验
 `IMAGE.sha256` 和构建信息 `BUILD.txt`：
 
 ```bash
 sha256sum -c SHA256SUMS
-xz -dk r4s-home-<commit>.img.xz
+gzip -dk r4s-home-<commit>.img.gz
 sha256sum -c IMAGE.sha256
 ```
+
+CI 使用 `gzip -9 -n` 压缩镜像，只上传压缩文件与校验信息，不上传原始 `.img`。
+gzip 通常比 xz 体积更大；此格式选择主要方便解压，不保证比旧产物更小。
 
 这是 `r4s-home` 的设备镜像，包含仓库中的固定 IP、MAC、公钥和可信 LAN 配置，
 不是适合任意设备的通用固件。使用前检查 `hosts/r4s-home/default.nix`。

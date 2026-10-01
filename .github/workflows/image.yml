@@ -75,9 +75,9 @@ jobs:
           mkdir -p out/ci
           name="r4s-home-${GITHUB_SHA}.img"
           sha256sum "${images[0]}" | awk -v name="$name" '{print $1 "  " name}' > out/ci/IMAGE.sha256
-          xz -T2 -6 -c "${images[0]}" > "out/ci/$name.xz"
-          xz -t "out/ci/$name.xz"
-          (cd out/ci && sha256sum "$name.xz" > SHA256SUMS)
+          gzip -9 -n -c "${images[0]}" > "out/ci/$name.gz"
+          gzip -t "out/ci/$name.gz"
+          (cd out/ci && sha256sum "$name.gz" > SHA256SUMS)
           printf 'Source: %s\nCommit: %s\nHost: r4s-home\nArchitecture: aarch64-linux\nBoot verification: not performed by CI\n' \
             "$GITHUB_REPOSITORY" "$GITHUB_SHA" > out/ci/BUILD.txt
 
