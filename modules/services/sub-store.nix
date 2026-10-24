@@ -57,6 +57,11 @@ in {
       default = "http://${healthHost}:${toString cfg.port}";
       description = "Browser-facing origin for the explicit sub-store-open-url command.";
     };
+    allowedOrigins = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ cfg.publicURL ];
+      description = "Browser origins allowed by Sub-Store, including its public frontend origin.";
+    };
     port = lib.mkOption { type = lib.types.port; default = 17893; };
   };
 
@@ -76,6 +81,7 @@ in {
         SUB_STORE_BACKEND_API_HOST = cfg.listenAddress;
         SUB_STORE_BACKEND_API_PORT = toString cfg.port;
         SUB_STORE_BACKEND_MERGE = "true";
+        SUB_STORE_CORS_ALLOWED_ORIGINS = lib.concatStringsSep "," cfg.allowedOrigins;
         SUB_STORE_FRONTEND_PATH = toString cfg.frontendPackage;
         NODE_OPTIONS = "--max-old-space-size=96";
       };

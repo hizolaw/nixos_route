@@ -1,4 +1,16 @@
-{ config, lib, routerServicePackages, ... }: {
+{ config, lib, pkgs, routerServicePackages, ... }:
+let
+  launchSettings = pkgs.writeText "router-console-links.json" (builtins.toJSON {
+    dashboard = if config.router.mihomo.enable && config.router.mihomo.dashboardPackage != null then {
+      origin = "http://${config.router.network.address}:${toString config.router.mihomo.dashboardPort}";
+      tokenFile = "/var/lib/mihomo-router/controller-secret";
+    } else null;
+    subStore = if config.router.subStore.enable then {
+      origin = config.router.subStore.publicURL;
+      tokenFile = "/var/lib/sub-store/api-token";
+    } else null;
+  });
+in {
   imports = [ ../../hardware/nanopi-r4s-ddr3 ../../profiles/side-router.nix ];
   networking.hostName = "r4s";
   router.network = {
@@ -42,15 +54,29 @@
     };
     extraConfig = "access_log off; error_log /dev/null crit;";
   };
+  systemd.services.router-console-links = lib.mkIf config.services.router-console.enable {
+    description = "Prepare private console service launch links";
+    after = [ "mihomo-router.service" "sub-store.service" ];
+    before = [ "router-console.service" ];
+    serviceConfig = {
+      Type = "oneshot"; RemainAfterExit = true;
+      RuntimeDirectory = "router-console-links"; RuntimeDirectoryMode = "0700";
+      UMask = "0077";
+      ExecStart = "${pkgs.python3}/bin/python3 ${../../scripts/console-links.py} ${launchSettings} /run/router-console-links/environment";
+      ProtectSystem = "strict"; ProtectHome = true; PrivateTmp = true;
+      NoNewPrivileges = true;
+    };
+  };
   systemd.services.router-console = {
-    after = [ "mihomo-router.service" ];
+    after = [ "mihomo-router.service" "router-console-links.service" ];
+    requires = [ "router-console-links.service" ];
     serviceConfig.SupplementaryGroups = [ "router-status" ];
   };
   services.router-console = {
     enable = true;
     listenAddress = config.router.network.address;
     port = 9080;
-    environmentFiles = [ "-/var/lib/mihomo-router/environment" ];
+    environmentFiles = [ "-/var/lib/mihomo-router/environment" "/run/router-console-links/environment" ];
     settings = {
       title = "R4S · Router Console";
       plugins = [
@@ -66,22 +92,26 @@
           enabled = config.router.mihomo.enable;
           probe_url = "http://127.0.0.1:${toString config.router.mihomo.apiPort}/version";
           token_env = "CLASH_SECRET";
+          url_env = "DASHBOARD_URL";
           url = "http://${config.router.network.address}:${toString config.router.mihomo.dashboardPort}";
         }
         {
           id = "dashboard"; name = "Zashboard"; kind = "http";
+          url_env = "DASHBOARD_URL";
           enabled = config.router.mihomo.enable && config.router.mihomo.dashboardPackage != null;
           probe_url = "http://${config.router.network.address}:${toString config.router.mihomo.dashboardPort}/";
           url = "http://${config.router.network.address}:${toString config.router.mihomo.dashboardPort}";
         }
         {
           id = "subscription"; name = "订阅更新"; kind = "subscription";
+          url_env = "SUB_STORE_URL";
           enabled = config.router.mihomo.enable;
           status_file = "/var/lib/router-status/subscription.json";
           url = "http://${config.router.network.address}:${toString config.router.subStore.port}/";
         }
         {
           id = "sub-store"; name = "Sub-Store"; kind = "http";
+          url_env = "SUB_STORE_URL";
           enabled = config.router.subStore.enable;
           probe_url = "http://127.0.0.1:${toString config.router.subStore.port}/";
           url = "http://${config.router.network.address}:${toString config.router.subStore.port}/";

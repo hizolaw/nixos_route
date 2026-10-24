@@ -43,17 +43,17 @@
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1792860557,
-        "narHash": "sha256-omT4Eyw0KFiF9ZtSuuo6mahTO+DYRqkkaUcWHd2s3YA=",
+        "lastModified": 1792862675,
+        "narHash": "sha256-061tm1gbvad7jc3MhpvJN/CQygwSk5ozYDYXytDXbXc=",
         "owner": "hizolaw",
         "repo": "router-console",
-        "rev": "a311e9d741b17a62515bf29f361ebb218d837228",
+        "rev": "702db66065f05f34bdb32adc3f4fe8d9642617c9",
         "type": "github"
       },
       "original": {
         "owner": "hizolaw",
         "repo": "router-console",
-        "rev": "a311e9d741b17a62515bf29f361ebb218d837228",
+        "rev": "702db66065f05f34bdb32adc3f4fe8d9642617c9",
         "type": "github"
       }
     }

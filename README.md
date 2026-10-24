@@ -150,7 +150,7 @@ R4S 启用原生 udpxy，状态页为 `http://192.168.1.5:4022/status`。
 独立选项为 `router.udpxy.{enable,listenAddress,multicastInterface,port,maxClients}`；
 在主机配置设置 `router.udpxy.enable = false` 即可关闭。`just status` 包含该服务。
 
-代理面板：`http://192.168.1.5:8080`（Zashboard）；mixed 代理端口 7890。Mihomo API 只监听 `127.0.0.1:9090`，面板通过同源反代访问。首次打开 Zashboard 时主机和端口自动取当前页面地址（本机为 `192.168.1.5:8080`），密码填写 `just mihomo-secret` 获取的令牌；不要填浏览器所在设备的 `127.0.0.1:9090`。手机 IPv4 网关与 DNS 都设为 `192.168.1.5`。
+代理面板：`http://192.168.1.5:8080`（Zashboard）；mixed 代理端口 7890。Mihomo API 只监听 `127.0.0.1:9090`，面板通过同源反代访问。从 Router Console 登录后点击 Zashboard / Sub-Store 会自动带入连接配置。入口凭据在运行时读取，仅通过认证后的状态接口返回，不写入 Nix store 或公开静态页面。直接打开 Zashboard 时主机和端口自动取当前页面地址（本机为 `192.168.1.5:8080`），密码可填写 `just mihomo-secret` 获取的令牌；不要填浏览器所在设备的 `127.0.0.1:9090`。手机 IPv4 网关与 DNS 都设为 `192.168.1.5`。
 
 - dnsmasq 独立监听 LAN/loopback 的 UDP、TCP 53，上游为直连 DNS；不依赖 Mihomo、面板或订阅服务，不启用 DHCP。当前抑制 AAAA，未接管 IPv6 默认路由。
 - Mihomo 使用真实 IP 与域名嗅探，内部 DNS 仅监听 loopback 1053，不劫持 LAN DNS。TUN 使用独占表 2033、优先级 10000–10010，停止后只清理自身路由；关闭严格路由及自动重定向，核心退出后流量回到现有默认网关。核心运行但节点失效时，故障回退组尝试 DIRECT；受阻站点仍受直连网络本身限制。

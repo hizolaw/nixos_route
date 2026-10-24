@@ -99,3 +99,14 @@ SD 卡验证启动、SSH、网桥、看门狗、WebUI、订阅及手机代理；
 浏览器确认的缺陷是首次设置默认连接浏览器本机的 127.0.0.1:9090，而控制器仅在路由器 loopback 监听。针对本部署的静态包修正为当前页面的 protocol/host/port，凭据仍为空、由用户输入；nginx 添加 Cache-Control: no-cache，使浏览器重新校验同源资源。修补保留上游固定版本，匹配失败会使构建失败，避免升级时静默失效。
 
 Mac 上 assets-check、check、build 通过，在线 switch 仅重启 nginx。最终系统 `/nix/store/rhm7xs3ca3qf6hkc1s4lw0n9wj4a03ps-nixos-system-r4s-24.05.20241230.b134951`。真实 Chromium 验证首次地址/端口自动填写、输入令牌后连接、63 节点可见、390px 页面及刷新恢复；无页面脚本错误。该次没有重启设备。
+
+
+## 2026-10-25：控制台一键连接两个管理面板
+
+- router-console input 更新到 `702db66065f05f34bdb32adc3f4fe8d9642617c9`，新增通用可选 `url_env`。部署侧生成私有运行时入口，缺失或非法环境入口仅隐藏链接，不影响服务探测。
+- `/run/router-console-links/` 为 root 0700，environment 为 root 0600。文件只包含由服务运行时令牌构造的入口，不修改 Profile、不写入 Nix store。Zashboard 从 setup fragment 带入后端地址与令牌；直接 overview fragment 会在首次路由重定向时丢参数，因此不作为自动连接入口。Sub-Store 带入 api 查询参数。
+- 浏览器定位到 Sub-Store 静态脚本因默认 CORS 策略拒绝 LAN Origin 而返回 403，新增 allowedOrigins 选项，默认显式允许 publicURL，未使用通配来源。
+- Rust 16 项测试、链接构造 2 项测试、Mac ARM64 应用/模块检查和 just assets-check/check/build 成功；DNS 与代理模块两种架构启用/禁用等求值见本次命令结果。
+- 系统 `/nix/store/5ypw5rhd7apq3gnmgyvrn7jmh084lqa2-nixos-system-r4s-24.05.20241230.b134951` 已在线 switch；只重启 router-console、sub-store，新增运行时链接初始化单元。DNS、Mihomo、udpxy、watchdog PID 均保持。未重启设备。
+- 全新 Chromium 登录控制台，真实点击 Zashboard / Sub-Store 两个“打开服务”入口，无需再次填令牌：前者显示 R4S / Proxies 与 63 节点，后者显示 4 个订阅和集合；未认证状态接口仍返回 401。Sub-Store 空白页已消失。
+- Zashboard 自身检查 GitHub 最新版本的外部请求曾返回 403 并产生非阻断脚本错误；连接和节点页面成功。旧远程订阅仍有上游失效提示，未将它们冒充为更新成功。

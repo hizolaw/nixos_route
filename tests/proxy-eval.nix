@@ -85,6 +85,7 @@ let
     assert subStore.serviceConfig.StandardError == "null";
     assert subStore.environment.SUB_STORE_BACKEND_API_PORT == "17894";
     assert subStore.environment.NODE_OPTIONS == "--max-old-space-size=96";
+    assert subStore.environment.SUB_STORE_CORS_ALLOWED_ORIGINS == "http://127.0.0.1:17894";
     assert subStore.serviceConfig.MemoryMax == "192M";
     assert builtins.length nginx.listen == 1;
     assert (builtins.head nginx.listen).addr == "127.0.0.1";
