@@ -48,4 +48,12 @@ rollback:
     sudo nixos-rebuild switch --rollback
 
 status:
-    systemctl status metacubexd mihomo-subscription-relay udpxy --no-pager
+    systemctl status router-console metacubexd mihomo-subscription-relay udpxy --no-pager
+
+# Inspect the console service on the router.
+console-status:
+    systemctl status router-console --no-pager
+
+# Read the persistent access token on the router; never commit it.
+console-token:
+    sudo cat /var/lib/router-console/access.token

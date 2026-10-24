@@ -1,6 +1,6 @@
 # NixOS Router
 
-模块化 NixOS 旁路由配置。系统更新和镜像构建使用独立入口，共享硬件、网络与服务模块。原生运行 MetaCubeXD Server 与 mihomo，不依赖容器。
+模块化 NixOS 旁路由配置。系统更新和镜像构建使用独立入口，共享硬件、网络与服务模块。原生运行 MetaCubeXD Server、mihomo 与独立的 Router Console，不依赖容器。
 
 ## 支持范围
 
@@ -127,6 +127,18 @@ gzip 通常比 xz 体积更大；此格式选择主要方便解压，不保证�
 不是适合任意设备的通用固件。使用前检查 `hosts/r4s-home/default.nix`。
 CI 不刷写、不部署、不发布 Release；构建成功不等于实机启动验证通过。
 
+## 路由器控制台
+
+独立控制台为 `http://192.168.1.5:9080`，显示系统指标、DNS 实际解析、Mihomo API、现有代理面板和 udpxy 的 HTTP 状态。控制台不改变现有代理、DNS、网桥和路由配置；HTTP 接口正常不等于代理出口可用。当前 DNS 仍由 Mihomo 提供，独立 DNS 迁移尚未实施。
+
+代码和通用 NixOS 模块位于 [router-console](https://github.com/hizolaw/router-console)，本仓库通过 flake 锁定其版本，应用工具链使用自己的 nixpkgs，不升级路由系统的 24.05 基线。具体监听地址、插件和服务入口在 `hosts/r4s-home/default.nix`。
+
+首次启动生成 `/var/lib/router-console/access.token`（root-only），通过 systemd credential 传给普通权限的控制台进程，后续切换和重启不覆盖。SSH 登录路由器后运行 `just console-token` 或 `sudo cat /var/lib/router-console/access.token` 获取令牌；令牌不进 Git。`just console-status` 查看服务。
+
+当前模块通过只读运行时环境文件读取 Mihomo API 凭据，缺少凭据只会让该插件显示未知，不影响控制台启动。不引入代理服务依赖，也不管理应用 Profile。
+
+新增控制台的日常部署只需在独立 ARM64 builder 上 `just assets-check`、`just check`、`just build`，传输构建 closure 后在目标机 switch；无需构建或刷写固件。Mac mini 可复用已有 nix-darwin Linux builder 和 `/Volumes/R4SBuildAssets/r4s`。现有 GitHub CI 仍只用于手动构建刷机固件。
+
 ## 服务与配置归属
 
 R4S 启用原生 udpxy，状态页为 `http://192.168.1.5:4022/status`。
@@ -138,7 +150,7 @@ R4S 启用原生 udpxy，状态页为 `http://192.168.1.5:4022/status`。
 独立选项为 `router.udpxy.{enable,listenAddress,multicastInterface,port,maxClients}`；
 在主机配置设置 `router.udpxy.enable = false` 即可关闭。`just status` 包含该服务。
 
-默认 WebUI：`http://192.168.1.5:8080`，mihomo API 9090，mixed 7890。手机 IPv4 网关与 DNS 都设为 `192.168.1.5`。
+现有代理面板：`http://192.168.1.5:8080`，mihomo API 9090，mixed 7890。手机 IPv4 网关与 DNS 都设为 `192.168.1.5`。
 
 Nix 管服务和软件版本；订阅地址、节点、分流和自动更新由 WebUI 管理，持久化在 `/var/lib/metacubexd/`。secret 在首次启动生成，不存储到仓库。
 
