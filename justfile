@@ -48,7 +48,7 @@ rollback:
     sudo nixos-rebuild switch --rollback
 
 status:
-    systemctl status router-console metacubexd mihomo-subscription-relay udpxy --no-pager
+    systemctl status router-console dnsmasq mihomo-router nginx sub-store udpxy --no-pager
 
 # Inspect the console service on the router.
 console-status:
@@ -57,3 +57,20 @@ console-status:
 # Read the persistent access token on the router; never commit it.
 console-token:
     sudo cat /var/lib/router-console/access.token
+
+# Run the same node-only updater as the automatic timer; execute on the router.
+subscription-update:
+    sudo systemctl start mihomo-subscription-update.service
+    sudo cat /var/lib/router-status/subscription.json
+
+# Last subscription attempt, success, and safe error details.
+subscription-status:
+    sudo cat /var/lib/router-status/subscription.json
+
+# Zashboard controller secret (persistent, root-readable).
+mihomo-secret:
+    sudo cat /var/lib/mihomo-router/controller-secret
+
+# Complete Sub-Store frontend URL with runtime API token; do not commit it.
+sub-store-url:
+    sudo sub-store-open-url

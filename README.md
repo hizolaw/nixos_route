@@ -1,6 +1,6 @@
 # NixOS Router
 
-模块化 NixOS 旁路由配置。系统更新和镜像构建使用独立入口，共享硬件、网络与服务模块。原生运行 MetaCubeXD Server、mihomo 与独立的 Router Console，不依赖容器。
+模块化 NixOS 旁路由配置。系统更新和镜像构建使用独立入口，共享硬件、网络与服务模块。原生运行独立 DNS、Mihomo、Zashboard、Sub-Store 与 Rust Router Console，不依赖容器。
 
 ## 支持范围
 
@@ -16,7 +16,7 @@ x86_64 提供移植入口说明，尚未提供可刷写镜像或实机保证。�
 | `hardware/nanopi-r4s-ddr3/` | BSP、看门狗、启动安装、资产校验；原 NOTES.md 原样保留于此 |
 | `modules/system/` | 基础系统、SSH 访问 |
 | `modules/networking/` | 参数化旁路由网络 |
-| `modules/services/` | 独立可开关的 MetaCubeXD 和订阅 UA 中继 |
+| `modules/services/` | 独立可开关的 DNS、代理、面板、订阅管理与组播服务 |
 | `profiles/` | 组合模块形成网络角色 |
 | `packages/` | 软件打包与前端兼容补丁说明 |
 | `images/` | 分区与完整镜像装配，不参与日常系统配置 |
@@ -26,7 +26,7 @@ x86_64 提供移植入口说明，尚未提供可刷写镜像或实机保证。�
 
 需要 Linux 或 macOS、Git、启用 `nix-command flakes` 的 Nix、just 和 GNU coreutils。构建 ARM64 软件需要 ARM64 Linux 构建机、Nix 远程 builder 或已配置的 binfmt/QEMU；`just` 不自动修改宿主机仿真设置。
 
-Flake 锁定当前已使用的 NixOS 24.05 revision，升级 nixpkgs 单独验证；这是兼容性基线，并非当前受支持的安全更新分支。1GB R4S 上完整求值/构建可能耗尽可用内存，建议在有充足内存的 ARM64 builder 上构建，再安排部署；不要在承担网络出口的设备上并发重构构建。
+Flake 锁定当前已使用的 NixOS 24.05 revision，升级 nixpkgs 单独验证；这是兼容性基线，并非当前受支持的安全更新分支。重编译和完整验证放在有充足内存的 ARM64 builder 上；轻量配置可在 R4S 上直接 switch，避免并发构建造成内存压力。
 
 R4S 的已验证 BSP 保存在 `hardware/nanopi-r4s-ddr3/bsp-assets.tar.xz`，使用 `xz -9e` 压缩，通过 Git LFS 下载。解包需要支持 xz 的 tar 和 xz 工具。包含内核、修改版 initramfs、DTB、内核模块与原卡 bootloader。不要用未经修改的 FriendlyWrt initramfs 替代。
 
@@ -129,7 +129,7 @@ CI 不刷写、不部署、不发布 Release；构建成功不等于实机启动
 
 ## 路由器控制台
 
-独立控制台为 `http://192.168.1.5:9080`，显示系统指标、DNS 实际解析、Mihomo API、现有代理面板和 udpxy 的 HTTP 状态。控制台不改变现有代理、DNS、网桥和路由配置；HTTP 接口正常不等于代理出口可用。当前 DNS 仍由 Mihomo 提供，独立 DNS 迁移尚未实施。
+独立控制台为 `http://192.168.1.5:9080`，以可选插件显示系统指标、DNS 实际解析、Mihomo API、Zashboard、订阅更新、Sub-Store 和 udpxy 状态。控制台只读；HTTP 接口正常不等于代理出口可用。DNS 由独立 dnsmasq 提供。
 
 代码和通用 NixOS 模块位于 [router-console](https://github.com/hizolaw/router-console)，本仓库通过 flake 锁定其版本，应用工具链使用自己的 nixpkgs，不升级路由系统的 24.05 基线。具体监听地址、插件和服务入口在 `hosts/r4s-home/default.nix`。
 
@@ -150,14 +150,25 @@ R4S 启用原生 udpxy，状态页为 `http://192.168.1.5:4022/status`。
 独立选项为 `router.udpxy.{enable,listenAddress,multicastInterface,port,maxClients}`；
 在主机配置设置 `router.udpxy.enable = false` 即可关闭。`just status` 包含该服务。
 
-现有代理面板：`http://192.168.1.5:8080`，mihomo API 9090，mixed 7890。手机 IPv4 网关与 DNS 都设为 `192.168.1.5`。
+代理面板：`http://192.168.1.5:8080`（Zashboard）；mixed 代理端口 7890。Mihomo API 只监听 `127.0.0.1:9090`，面板通过同源反代访问。手机 IPv4 网关与 DNS 都设为 `192.168.1.5`。
 
-Nix 管服务和软件版本；订阅地址、节点、分流和自动更新由 WebUI 管理，持久化在 `/var/lib/metacubexd/`。secret 在首次启动生成，不存储到仓库。
+- dnsmasq 独立监听 LAN/loopback 的 UDP、TCP 53，上游为直连 DNS；不依赖 Mihomo、面板或订阅服务，不启用 DHCP。当前抑制 AAAA，未接管 IPv6 默认路由。
+- Mihomo 使用真实 IP 与域名嗅探，内部 DNS 仅监听 loopback 1053，不劫持 LAN DNS。TUN 使用独占表 2033、优先级 10000–10010，停止后只清理自身路由；关闭严格路由及自动重定向，核心退出后流量回到现有默认网关。核心运行但节点失效时，故障回退组尝试 DIRECT；受阻站点仍受直连网络本身限制。
+- Sub-Store 独立运行，不需要代理核心在线。页面为 `http://192.168.1.5:17893`，完整管理链接通过 `just sub-store-url` 获取；链接内的 API 前缀属于凭据。订阅在 Sub-Store 中管理，`router` 集合供更新器使用。
+- 每日 04:00（最多随机延迟 5 分钟）更新节点：只从本机 Sub-Store 获取、验证并原子替换 provider，通过 API 刷新节点；失败保留旧节点。核心关闭时仅保存，不自动启动核心。不会 PATCH 或启动时重写用户的分流、DNS 和选择。
 
-`router-local` 合并覆盖仅在缺失时创建，之后允许 WebUI 编辑。修改 Nix 的初始覆盖模板不会覆盖已有 Profile。覆盖提供 LAN 访问、TUN、DNS 监听；`ipv6: true` 保留内核能力，`dns.ipv6: false` 抑制 AAAA。此配置不接管手机的 IPv6 默认路由，也不保证绕过该 DNS 的应用不直连。
+```bash
+just subscription-update   # 手动更新并查看安全状态
+just subscription-status
+just mihomo-secret         # 面板 API 令牌，仅在本机显示
+just sub-store-url         # 带凭据的管理链接，不要公开
+just status
+```
 
-订阅中继为 `http://192.168.1.5:18080/https://provider.example/subscribe?...`，固定请求 UA。仅在服务商需要时使用。当前兼容策略关闭旁路由防火墙，WebUI 与中继只能部署在可信 LAN，不应暴露到公网。
+Nix 管软件、服务和缺失文件的初始模板。运行配置与节点在 `/var/lib/mihomo-router/`，订阅数据在 `/var/lib/sub-store/`，控制台在 `/var/lib/router-console/`；secret、订阅及运行 Profile 不进 Git。已有配置不会在 switch 或启动时被模板覆盖。更改已有策略应显式编辑运行配置并先验证；回滚 NixOS 不会回滚应用数据。
 
-模块选项包括 `router.metacubexd.{enable,port,apiPort,mixedPort,backendURL}`、`router.subscriptionRelay.{enable,listenAddress,port}` 和 `router.network.{interfaces,address,prefixLength,gateway,nameservers}`。
+从旧 MetaCubeXD 迁移必须先备份 `/var/lib/metacubexd`。`mihomo-migrate stage --backup /root/backup.tar.gz` 显式导入节点和规则，使用新网络策略；启动新服务后运行 `mihomo-migrate connect-sub-store --backup /root/backup.tar.gz` 导入缺失订阅和集合。迁移不自动运行，不修改旧数据，不复制旧 Fake-IP 缓存。首次切换后客户端可能需要刷新旧 DNS 缓存。旧模块保留供回退，当前部署不启用 MetaCubeXD 或 UA 中继。
+
+模块可独立关闭：`router.dns.enable`、`router.mihomo.enable`、`router.subStore.enable`、`router.udpxy.enable`。Mihomo 的 `dashboardPackage = null` 可不部署面板。主机为控制台插件配置对应启用条件；订阅状态通过独立只读状态文件共享，不向控制台暴露节点或订阅凭据。当前服务仅适合可信 LAN，未配置公网入口。
 
 新增硬件见 [hardware-porting.md](docs/hardware-porting.md)，R4S 历史见 [NOTES.md](hardware/nanopi-r4s-ddr3/NOTES.md)。历史中的绝对路径、旧命令与中间结论不代表当前配置。

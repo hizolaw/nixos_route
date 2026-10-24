@@ -58,3 +58,35 @@ SD 卡验证启动、SSH、网桥、看门狗、WebUI、订阅及手机代理；
 此次验证的是在线 switch 和控制台运行，不是重启或刷机验收。没有重新启动设备，因此不能据此宣称新 generation 已通过实机启动验证。
 
 当前 DNS 仍由 Mihomo 提供，独立 DNS、Zashboard/Sub-Store 替换和订阅更新迁移仍属后续工作。
+
+
+## 2026-10-25：独立 DNS 与 Mihomo / Sub-Store 重构
+
+### 求值、构建与代码检查
+
+- 系统仍固定 NixOS 24.05，BSP、网桥、默认网关和看门狗不变；现代应用包单独取自 router-console 的固定 nixpkgs。
+- router-console 固定为 `a311e9d741b17a62515bf29f361ebb218d837228`，新增订阅状态插件；ARM64 应用和模块检查在 Mac Linux builder 构建成功。
+- Mac mini 独立工作目录执行 `just assets-check`、`just check`、`just build` 成功；镜像只求值，没有构建固件。
+- DNS 与代理模块在 aarch64-linux / x86_64-linux 的启用、禁用、替换包和非默认端口求值通过；16 项 Python 测试通过，包含真实 Mihomo 1.19.27 provider 热刷新。
+- 生成的清理和 Sub-Store shell 脚本通过 bash -n；git diff --check 通过。
+- 最终系统：`/nix/store/lrzq4vnd4pllldvj95gjvn0s7c4l54cy-nixos-system-r4s-24.05.20241230.b134951`。
+
+### 状态迁移与在线激活
+
+- `/root/mihomo-refactor-20261025/` 保存旧 MetaCubeXD 数据归档、旧系统路径和 boot.scr；迁移不修改旧数据。
+- switch 前显式 stage 迁移 22 个旧节点和 3879 条规则；保留直连/拒绝规则，将旧代理策略映射到故障回退组，CN IP 使用固定本地规则文件，未复制 Fake-IP 缓存。
+- 经预构建 closure 执行 switch，boot.scr 由既有安装接口更新；没有重启或刷卡。首次切换时 nginx 因网络地址初始化短暂重试，已增加静态网络配置的启动顺序。
+- 根据用户要求同步本机 Sub-Store 的 3 个订阅、2 个集合及处理设置，保留路由器旧订阅；修改前另在 `/root/r4s-state-backups/` 创建私有备份。
+- 两个旧远程订阅直接请求均返回 404。运行集合 router 暂使用本机有效本地订阅，导出、配置验证、原子替换与 provider 热刷新成功，共 63 节点；远程源仍需后续更新有效地址。
+- 通过 R4S mixed 端口访问 Google / gstatic generate_204 均返回 204；自动选择组延迟探测成功。
+
+### 故障验证与边界
+
+- 同时停止 Mihomo、Sub-Store、nginx，dnsmasq PID 保持不变；专用表 2033 和优先级 10000–10010 清理，策略路由只剩系统默认项。
+- 隔离 network namespace 模拟下游客户端，经 R4S 转发直连百度 HTTPS 返回 200；临时 veth、SNAT 和 namespace 随测试清理。
+- 实际 LAN Mac 客户端通过 R4S 的 UDP / TCP DNS 解析成功。模拟 namespace 的 UDP 成功，但该额外接口上的 TCP 被拒绝，原因未进一步定位，不作为 LAN TCP 验证依据。
+- 对核心发送 SIGKILL，在自动重启等待期间确认专用策略已清理、DNS 仍解析；之后核心自动恢复。
+- DNS 状态探测改用 www.baidu.com：公网直接请求上游 DNS 的 example.com UDP 本身超时，而其他域名正常；避免把单个域名上游问题误报为整个 DNS 不可用。
+- 看门狗 PID 484、udpxy PID 726 保持；既有手工 rtp2httpd 不变。
+
+验证覆盖在线 switch 和运行恢复，尚未验证新 generation 重新上电启动，也没有验证所有订阅节点或所有站点。订阅/状态文件与凭据均不入 Git。

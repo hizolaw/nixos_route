@@ -36,3 +36,6 @@
 /ref-fw/bsp-ramdisk.gz
 /ref-fw/ramdisk/
 /ref-fw/modules/
+
+__pycache__/
+*.py[cod]
