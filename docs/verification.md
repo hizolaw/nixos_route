@@ -90,3 +90,12 @@ SD 卡验证启动、SSH、网桥、看门狗、WebUI、订阅及手机代理；
 - 看门狗 PID 484、udpxy PID 726 保持；既有手工 rtp2httpd 不变。
 
 验证覆盖在线 switch 和运行恢复，尚未验证新 generation 重新上电启动，也没有验证所有订阅节点或所有站点。订阅/状态文件与凭据均不入 Git。
+
+
+## 2026-10-25：Zashboard 首次连接修复
+
+用户报告页面出现旧 MetaCube。HTTP 获取与全新 Chromium 实测服务器实际提供 Zashboard；尚未复现用户浏览器中的旧页面，不能据此认定其原因。
+
+浏览器确认的缺陷是首次设置默认连接浏览器本机的 127.0.0.1:9090，而控制器仅在路由器 loopback 监听。针对本部署的静态包修正为当前页面的 protocol/host/port，凭据仍为空、由用户输入；nginx 添加 Cache-Control: no-cache，使浏览器重新校验同源资源。修补保留上游固定版本，匹配失败会使构建失败，避免升级时静默失效。
+
+Mac 上 assets-check、check、build 通过，在线 switch 仅重启 nginx。最终系统 `/nix/store/rhm7xs3ca3qf6hkc1s4lw0n9wj4a03ps-nixos-system-r4s-24.05.20241230.b134951`。真实 Chromium 验证首次地址/端口自动填写、输入令牌后连接、63 节点可见、390px 页面及刷新恢复；无页面脚本错误。该次没有重启设备。

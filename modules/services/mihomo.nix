@@ -191,7 +191,10 @@ in {
       virtualHosts.router-dashboard = {
         listen = [ { addr = cfg.listenAddress; port = cfg.dashboardPort; } ];
         root = toString cfg.dashboardPackage;
-        extraConfig = "access_log off;";
+        extraConfig = ''
+          access_log off;
+          add_header Cache-Control "no-cache" always;
+        '';
         locations."/".tryFiles = "$uri $uri/ /index.html";
         locations."~ ^/(version|configs|proxies|providers|rules|connections|traffic|logs|dns|cache|group)(/|$)" = {
           proxyPass = "http://127.0.0.1:${toString cfg.apiPort}";
