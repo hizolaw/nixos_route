@@ -110,3 +110,14 @@ Mac 上 assets-check、check、build 通过，在线 switch 仅重启 nginx。�
 - 系统 `/nix/store/5ypw5rhd7apq3gnmgyvrn7jmh084lqa2-nixos-system-r4s-24.05.20241230.b134951` 已在线 switch；只重启 router-console、sub-store，新增运行时链接初始化单元。DNS、Mihomo、udpxy、watchdog PID 均保持。未重启设备。
 - 全新 Chromium 登录控制台，真实点击 Zashboard / Sub-Store 两个“打开服务”入口，无需再次填令牌：前者显示 R4S / Proxies 与 63 节点，后者显示 4 个订阅和集合；未认证状态接口仍返回 401。Sub-Store 空白页已消失。
 - Zashboard 自身检查 GitHub 最新版本的外部请求曾返回 403 并产生非阻断脚本错误；连接和节点页面成功。旧远程订阅仍有上游失效提示，未将它们冒充为更新成功。
+
+## 2026-10-25：系统账户登录与会话部署
+
+- router-console 固定为 `cf1fb7cb60d81fabb1a045bcc6dc1b1b7a393792`，主机使用 `authentication = "system"`、允许 `nixos` / `root`。不修改系统密码、SSH 认证或代理/订阅配置。
+- Web 进程改为静态普通用户 router-console；独立 root PAM helper 仅监听私有 Unix socket，目录 root:router-console-auth 0750，socket 0660。helper 按显式允许列表执行宿主 pam_unix 的 authenticate/account；无 nullok，不接受空密码或旧 Bearer。
+- 登录最多 2 个并发、全局每分钟 8 次失败，正文/字段有界；会话仅存随机令牌摘要、用户名和到期时间，最多 128 个，默认 12 小时。浏览器使用 HttpOnly/SameSite=Strict cookie，不把密码或会话写入 localStorage/sessionStorage；退出撤销，Web 重启清空。
+- 23 项 Rust 测试、全目标 Clippy（警告视为错误）、格式检查、新前端 4 项 Playwright 测试通过。Nix module 在 x86_64-linux/aarch64-linux 求值通过，ARM 包与模块检查在 Mac Linux builder 构建成功。
+- Mac 上 `just assets-check`、`just check`、`just build` 通过；系统 `/nix/store/r4fkj6iwkbc2w512fpgzd4bwap6qdd3h-nixos-system-r4s-24.05.20241230.b134951` 经 dry-activate 后在线 switch 成功。仅替换控制台、停止旧 token 初始化并新增 PAM helper，网络服务 PID 均保持。此前系统和 boot.scr 保存在 `/root/router-console-system-auth-20261025/`。
+- R4S 创建临时无 home/nologin/非特权账户，在同一实际 PAM service、同一 helper 二进制和相同安全限制下，通过独立测试 socket/19081 页面实测：错密码拒绝、正确密码登录、刷新保持、跨源退出 403、正常退出后状态 401；cookie 标志及浏览器 storage 验证通过，无页面脚本错误。随后删除临时账户、凭据、服务、运行目录和监听端口。未读取或改动生产账户密码，也未以 mock 代替本段 PAM 实测。
+- 生产 9080 显示用户名/密码表单，标准 autocomplete=username/current-password；`/api/auth` 返回 system，未登录状态接口 401。nixos 仍为 P、root 仍为 L，原状态不变。当前生产账户的正确密码由用户输入，未代用户读取或猜测。
+- 当时 cgroup 内存约 Web 8.9 MiB、helper 0.6 MiB，无 failed units。此次仍为在线 switch 验证，没有重新上电启动验收。

@@ -133,7 +133,7 @@ CI 不刷写、不部署、不发布 Release；构建成功不等于实机启动
 
 代码和通用 NixOS 模块位于 [router-console](https://github.com/hizolaw/router-console)，本仓库通过 flake 锁定其版本，应用工具链使用自己的 nixpkgs，不升级路由系统的 24.05 基线。具体监听地址、插件和服务入口在 `hosts/r4s-home/default.nix`。
 
-首次启动生成 `/var/lib/router-console/access.token`（root-only），通过 systemd credential 传给普通权限的控制台进程，后续切换和重启不覆盖。SSH 登录路由器后运行 `just console-token` 或 `sudo cat /var/lib/router-console/access.token` 获取令牌；令牌不进 Git。`just console-status` 查看服务。
+本部署使用路由器系统账户登录：用户名 `nixos`，密码就是该账户现有的系统密码。`root` 也在允许列表中，但当前账户密码锁定，不能用于密码登录；不会自动解锁或设置密码。会话默认保留 12 小时，刷新页面无需重新输入，退出或控制台重启后重新登录。`just console-status` 查看服务，`just console-auth-status` 查看认证适配服务。旧访问令牌文件保留用于兼容回退，但当前系统认证模式不接受它。
 
 当前模块通过只读运行时环境文件读取 Mihomo API 凭据，缺少凭据只会让该插件显示未知，不影响控制台启动。不引入代理服务依赖，也不管理应用 Profile。
 

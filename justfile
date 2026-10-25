@@ -54,7 +54,11 @@ status:
 console-status:
     systemctl status router-console --no-pager
 
-# Read the persistent access token on the router; never commit it.
+# Inspect the isolated system-password adapter on the router.
+console-auth-status:
+    systemctl status router-console-auth --no-pager
+
+# Legacy token-mode fallback only; current deployment uses the system password.
 console-token:
     sudo cat /var/lib/router-console/access.token
 

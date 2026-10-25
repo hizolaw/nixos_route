@@ -74,6 +74,8 @@ in {
   };
   services.router-console = {
     enable = true;
+    authentication = "system";
+    allowedUsers = [ "nixos" "root" ];
     listenAddress = config.router.network.address;
     port = 9080;
     environmentFiles = [ "-/var/lib/mihomo-router/environment" "/run/router-console-links/environment" ];
