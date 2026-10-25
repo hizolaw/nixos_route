@@ -129,7 +129,7 @@ CI 不刷写、不部署、不发布 Release；构建成功不等于实机启动
 
 ## 路由器控制台
 
-独立控制台为 `http://192.168.1.5:9080`，以可选插件显示系统指标、DNS 实际解析、Mihomo API、Zashboard、订阅更新、Sub-Store 和 udpxy 状态。控制台只读；HTTP 接口正常不等于代理出口可用。DNS 由独立 dnsmasq 提供。
+独立控制台为 `http://192.168.1.5/`，以可选插件显示系统指标、DNS 实际解析、Mihomo API、Zashboard、订阅更新、Sub-Store 和 udpxy 状态。控制台只读；HTTP 接口正常不等于代理出口可用。DNS 由独立 dnsmasq 提供。
 
 代码和通用 NixOS 模块位于 [router-console](https://github.com/hizolaw/router-console)，本仓库通过 flake 锁定其版本，应用工具链使用自己的 nixpkgs，不升级路由系统的 24.05 基线。具体监听地址、插件和服务入口在 `hosts/r4s-home/default.nix`。
 
@@ -170,5 +170,25 @@ Nix 管软件、服务和缺失文件的初始模板。运行配置与节点在 
 从旧 MetaCubeXD 迁移必须先备份 `/var/lib/metacubexd`。`mihomo-migrate stage --backup /root/backup.tar.gz` 显式导入节点和规则，使用新网络策略；启动新服务后运行 `mihomo-migrate connect-sub-store --backup /root/backup.tar.gz` 导入缺失订阅和集合。迁移不自动运行，不修改旧数据，不复制旧 Fake-IP 缓存。首次切换后客户端可能需要刷新旧 DNS 缓存。旧模块保留供回退，当前部署不启用 MetaCubeXD 或 UA 中继。
 
 模块可独立关闭：`router.dns.enable`、`router.mihomo.enable`、`router.subStore.enable`、`router.udpxy.enable`。Mihomo 的 `dashboardPackage = null` 可不部署面板。主机为控制台插件配置对应启用条件；订阅状态通过独立只读状态文件共享，不向控制台暴露节点或订阅凭据。当前服务仅适合可信 LAN，未配置公网入口。
+
+## Mihomo 规则管理
+
+总览使用 LAN 80 端口，9080 只在 loopback 提供内部服务。登录后在“Mihomo 规则”卡片打开管理器，可添加/删除/启停规则订阅，用表单追加规则或直接编辑多行原始规则，点击“验证并应用”。自定义规则优先于订阅规则，订阅规则优先于原有分流；因此可手写 DIRECT 白名单覆盖默认广告拦截。
+
+`router.mihomo.rules.enable` 独立控制管理服务与插件。`router.mihomo.rules.subscriptions` 提供 Nix 初始订阅，默认是 [MetaCubeX/meta-rules-dat category-ads-all](https://github.com/MetaCubeX/meta-rules-dat)。固定版本的 904 条域名规则作本地 seed，运行时 HTTP provider 每日更新并保留缓存；离线启动不依赖广告源。默认目标为 REJECT。
+
+Nix 只填补缺失数据，修改默认订阅不会覆盖已有 UI 设置。自己的订阅地址应在运行时添加，不把私有地址或凭据写入 Nix store。持久化文件为 `/var/lib/mihomo-router/rule-sources.json`、`rules/custom.list`，最终生效配置仍是 `config.yaml`，节点订阅另行管理。
+
+也可以 SSH 编辑 `/var/lib/mihomo-router/rules/custom.list`，每行一条完整 Mihomo 规则，支持空行和 `#` 注释：
+
+```text
+DOMAIN-SUFFIX,ads.example,REJECT
+DOMAIN-SUFFIX,allowed.example,DIRECT
+IP-CIDR,203.0.113.0/24,DIRECT,no-resolve
+```
+
+编辑后点管理器“重新读取”或执行 `just rules-reload`，显式验证并加载；启动时不会自动改写运行配置。非法内容、版本冲突或下载失败保留当前生效配置；应用失败恢复旧文件并重新加载旧配置。不要同时在其他工具中修改托管规则前缀，出现冲突应先重新读取并合并。
+
+当前支持 HTTPS 源的 domain/ipcidr/classical YAML `payload` 和 text 源，最多 16 个订阅；单源最多 2 MiB/2 万条，合计 8 MiB，手写最多 2000 行/128 KiB。编辑器不自动引入 GeoIP/GeoSite 数据库，也暂不接受这些规则；常见 DOMAIN/IP/PROCESS 等规则由真实 Mihomo 校验。规则服务独立运行且没有 NET_ADMIN 权限，改规则不改变 DNS、TUN 或监听设置；广告拦截只作用于经过 Mihomo 的流量，独立 DNS 不因规则源故障失效。
 
 新增硬件见 [hardware-porting.md](docs/hardware-porting.md)，R4S 历史见 [NOTES.md](hardware/nanopi-r4s-ddr3/NOTES.md)。历史中的绝对路径、旧命令与中间结论不代表当前配置。

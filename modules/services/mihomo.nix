@@ -4,6 +4,27 @@ let
   state = "/var/lib/mihomo-router";
   python = pkgs.python3.withPackages (ps: [ ps.pyyaml ]);
   cncidr = import ../../packages/mihomo/cncidr.nix { inherit pkgs; };
+  ads = import ../../packages/mihomo/ads.nix { inherit pkgs; };
+  enabledRuleSubscriptions = lib.filter (subscription: subscription.enabled) cfg.rules.subscriptions;
+  ruleProviders = lib.listToAttrs (map (subscription: lib.nameValuePair "router-${subscription.name}" {
+    type = "http"; inherit (subscription) url behavior format;
+    path = "${state}/rules/providers/router-${subscription.name}.${subscription.format}";
+    interval = 86400; size-limit = 2097152;
+  }) enabledRuleSubscriptions);
+  rulePrefix = map (subscription: "RULE-SET,router-${subscription.name},${subscription.policy}") enabledRuleSubscriptions;
+  rulesSocket = "/run/mihomo-rules/control.sock";
+  rulesSettings = pkgs.writeText "mihomo-rules-settings.json" (builtins.toJSON {
+    runtimeDirectory = state; socket = rulesSocket;
+    mihomoBin = lib.getExe cfg.package;
+    controller = "http://127.0.0.1:${toString cfg.apiPort}";
+    secretFile = "${state}/controller-secret";
+    defaultSubscriptions = cfg.rules.subscriptions;
+    adsAsset = ads;
+    serviceActiveCommand = [ "${pkgs.systemd}/bin/systemctl" "is-active" "mihomo-router.service" ];
+  });
+  reloadRules = pkgs.writeShellScriptBin "mihomo-rules-reload" ''
+    exec ${python}/bin/python3 ${../../scripts/mihomo-rules-reload.py} ${rulesSocket}
+  '';
   policy = {
     mixed-port = cfg.mixedPort;
     allow-lan = true;
@@ -44,10 +65,12 @@ let
       proxy-server-nameserver = cfg.bootstrapServers;
       direct-nameserver = cfg.bootstrapServers;
     };
-    rule-providers.cncidr = {
-      type = "file"; behavior = "ipcidr"; format = "yaml";
-      path = "${state}/rules/cncidr.yaml";
-    };
+    rule-providers = {
+      cncidr = {
+        type = "file"; behavior = "ipcidr"; format = "yaml";
+        path = "${state}/rules/cncidr.yaml";
+      };
+    } // lib.optionalAttrs cfg.rules.enable ruleProviders;
     proxy-providers.subscription = {
       type = "file";
       path = "${state}/providers/subscription.yaml";
@@ -58,7 +81,7 @@ let
       { name = "自动选择"; type = "url-test"; use = [ "subscription" ]; url = "https://www.gstatic.com/generate_204"; interval = 300; tolerance = 50; lazy = true; }
       { name = "故障回退"; type = "fallback"; proxies = [ "节点选择" "DIRECT" ]; url = "https://www.gstatic.com/generate_204"; interval = 60; lazy = false; }
     ];
-    rules = [
+    rules = lib.optionals cfg.rules.enable rulePrefix ++ [
       "DOMAIN-SUFFIX,lan,DIRECT" "DOMAIN-SUFFIX,local,DIRECT"
       "IP-CIDR,127.0.0.0/8,DIRECT,no-resolve" "IP-CIDR,10.0.0.0/8,DIRECT,no-resolve"
       "IP-CIDR,172.16.0.0/12,DIRECT,no-resolve" "IP-CIDR,192.168.0.0/16,DIRECT,no-resolve"
@@ -84,6 +107,11 @@ let
     (state / "rules").mkdir(exist_ok=True)
     if not (state / "rules/cncidr.yaml").exists():
         shutil.copyfile("${cncidr}", state / "rules/cncidr.yaml")
+    ${lib.optionalString cfg.rules.enable ''
+    (state / "rules/providers").mkdir(exist_ok=True)
+    if not (state / "rules/providers/router-ads.yaml").exists():
+        shutil.copyfile("${ads}", state / "rules/providers/router-ads.yaml")
+    ''}
     secret = state / "controller-secret"
     if not secret.exists():
         secret.write_text(secrets.token_hex(32) + "\n")
@@ -142,14 +170,38 @@ in {
     };
     subStoreAddress = lib.mkOption { type = lib.types.str; default = "http://127.0.0.1:17893"; };
     updateCalendar = lib.mkOption { type = lib.types.str; default = "*-*-* 04:00:00"; };
+    rules = {
+      enable = lib.mkEnableOption "optional persistent Mihomo rule management";
+      subscriptions = lib.mkOption {
+        description = "Public default rule subscriptions, seeded only for missing runtime state.";
+        type = lib.types.listOf (lib.types.submodule { options = {
+          name = lib.mkOption { type = lib.types.str; };
+          url = lib.mkOption { type = lib.types.str; };
+          behavior = lib.mkOption { type = lib.types.enum [ "domain" "ipcidr" "classical" ]; default = "domain"; };
+          format = lib.mkOption { type = lib.types.enum [ "yaml" "text" ]; default = "yaml"; };
+          policy = lib.mkOption { type = lib.types.str; default = "REJECT"; };
+          enabled = lib.mkOption { type = lib.types.bool; default = true; };
+        }; });
+        default = [ {
+          name = "ads";
+          url = "https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/category-ads-all.yaml";
+        } ];
+      };
+    };
   };
   config = lib.mkIf cfg.enable {
-    assertions = [ { assertion = !(config.router.metacubexd.enable or false); message = "Disable router.metacubexd before enabling standalone Mihomo."; } ];
+    assertions = [
+      { assertion = !(config.router.metacubexd.enable or false); message = "Disable router.metacubexd before enabling standalone Mihomo."; }
+      { assertion = !cfg.rules.enable || (builtins.length cfg.rules.subscriptions == builtins.length (lib.unique (map (subscription: subscription.name) cfg.rules.subscriptions))
+          && lib.all (subscription: builtins.match "[A-Za-z][A-Za-z0-9_-]{0,47}" subscription.name != null && lib.hasPrefix "https://" subscription.url) cfg.rules.subscriptions);
+        message = "Default rule subscriptions need unique safe names and HTTPS URLs."; }
+    ];
     users.groups.mihomo-router = { };
     users.groups.router-status = { };
     users.users.mihomo-router = { isSystemUser = true; group = "mihomo-router"; };
     systemd.tmpfiles.rules = [ "d /var/lib/router-status 2750 mihomo-router router-status -" ];
-    environment.systemPackages = [ update migrate ];
+    environment.systemPackages = [ update migrate ] ++ lib.optional cfg.rules.enable reloadRules;
+    users.groups.router-console-control = lib.mkIf cfg.rules.enable { };
     systemd.services.mihomo-router = {
       description = "Mihomo proxy with independent LAN DNS";
       wantedBy = [ "multi-user.target" ];
@@ -167,6 +219,22 @@ in {
         NoNewPrivileges = true; ProtectSystem = "strict"; ProtectHome = true; PrivateTmp = true;
         RestrictAddressFamilies = [ "AF_INET" "AF_INET6" "AF_UNIX" "AF_NETLINK" ];
         MemoryMax = "256M";
+      };
+    };
+    systemd.services.mihomo-rules = lib.mkIf cfg.rules.enable {
+      description = "Persistent Mihomo rule policy management";
+      wantedBy = [ "multi-user.target" ];
+      after = [ "mihomo-router.service" ];
+      serviceConfig = {
+        User = "mihomo-router"; Group = "router-console-control";
+        RuntimeDirectory = "mihomo-rules"; RuntimeDirectoryMode = "0750";
+        WorkingDirectory = state; UMask = "0077";
+        ExecStart = "${python}/bin/python3 ${../../scripts/mihomo-rules.py} ${rulesSettings}";
+        Restart = "on-failure"; RestartSec = "3s";
+        ProtectSystem = "strict"; ProtectHome = true; PrivateTmp = true;
+        ReadWritePaths = [ state ]; NoNewPrivileges = true;
+        RestrictAddressFamilies = [ "AF_INET" "AF_INET6" "AF_UNIX" "AF_NETLINK" ];
+        CapabilityBoundingSet = ""; MemoryMax = "128M";
       };
     };
     systemd.services.mihomo-subscription-update = {

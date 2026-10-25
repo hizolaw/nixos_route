@@ -154,6 +154,11 @@ class Updater:
         raise UpdateError("cannot determine Mihomo service state")
 
     def apply(self, data):
+        with (self.runtime / ".configuration.lock").open("a") as configuration_lock:
+            fcntl.flock(configuration_lock, fcntl.LOCK_EX)
+            return self.apply_locked(data)
+
+    def apply_locked(self, data):
         self.validate(data)
         old = self.provider.read_bytes() if self.provider.exists() else None
         active = self.service_active()

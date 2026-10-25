@@ -1,7 +1,7 @@
 {
   description = "Modular NixOS router: runtime configurations and board images";
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/b134951a4c9f3c995fd7be05f3243f8ecd65d798";
-  inputs.router-console.url = "github:hizolaw/router-console/cf1fb7cb60d81fabb1a045bcc6dc1b1b7a393792";
+  inputs.router-console.url = "github:hizolaw/router-console/2a971bab30d783494a5d9119a9e8733a7c90273b";
   outputs = { self, nixpkgs, router-console }: let
     # Extract the Git LFS archive with `just assets-prepare` before evaluation.
     # The extracted asset directory is supplied explicitly, outside flake source.

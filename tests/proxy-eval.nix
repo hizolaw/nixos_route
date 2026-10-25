@@ -2,7 +2,7 @@
 { nixpkgs }:
 let
   lib = import (nixpkgs + "/lib");
-  evaluate = system: enable: dashboard: (import (nixpkgs + "/nixos/lib/eval-config.nix") {
+  evaluate = system: enable: dashboard: rules: (import (nixpkgs + "/nixos/lib/eval-config.nix") {
     inherit system;
     modules = [
       ../modules/services/mihomo.nix
@@ -33,6 +33,7 @@ let
             previous.writeText name text;
         }) ];
         router.mihomo = {
+          rules.enable = rules;
           inherit enable;
           package = pkgs.hello;
           dashboardPackage = if dashboard then pkgs.hello else null;
@@ -58,9 +59,11 @@ let
   ) (dependencies unit);
   check = system:
     let
-      enabled = evaluate system true false;
-      disabled = evaluate system false false;
-      withDashboard = evaluate system true true;
+      enabled = evaluate system true false false;
+      disabled = evaluate system false false false;
+      withDashboard = evaluate system true true false;
+      withRules = evaluate system true false true;
+      disabledWithRules = evaluate system false false true;
       mihomo = enabled.systemd.services.mihomo-router;
       subStore = enabled.systemd.services.sub-store;
       update = enabled.systemd.services.mihomo-subscription-update;
@@ -68,6 +71,13 @@ let
       nginx = withDashboard.services.nginx.virtualHosts.router-dashboard;
     in
     assert !(disabled.systemd.services ? mihomo-router);
+    assert !(enabled.systemd.services ? mihomo-rules);
+    assert !(disabledWithRules.systemd.services ? mihomo-rules);
+    assert withRules.systemd.services.mihomo-rules.serviceConfig.User == "mihomo-router";
+    assert withRules.systemd.services.mihomo-rules.serviceConfig.Group == "router-console-control";
+    assert withRules.systemd.services.mihomo-rules.serviceConfig.CapabilityBoundingSet == "";
+    assert withRules.systemd.services.mihomo-rules.requires == [];
+    assert withRules.systemd.services.mihomo-rules.bindsTo == [];
     assert !(disabled.systemd.services ? mihomo-subscription-update);
     assert !(disabled.systemd.timers ? mihomo-subscription-update);
     assert !(disabled.systemd.services ? sub-store);

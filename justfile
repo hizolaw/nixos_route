@@ -48,7 +48,7 @@ rollback:
     sudo nixos-rebuild switch --rollback
 
 status:
-    systemctl status router-console dnsmasq mihomo-router nginx sub-store udpxy --no-pager
+    systemctl status router-console dnsmasq mihomo-router mihomo-rules nginx sub-store udpxy --no-pager
 
 # Inspect the console service on the router.
 console-status:
@@ -78,3 +78,10 @@ mihomo-secret:
 # Complete Sub-Store frontend URL with runtime API token; do not commit it.
 sub-store-url:
     sudo sub-store-open-url
+
+# Explicitly validate and apply manually edited rule files; run on the router.
+rules-reload:
+    sudo mihomo-rules-reload
+
+rules-status:
+    systemctl status mihomo-rules --no-pager

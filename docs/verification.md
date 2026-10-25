@@ -121,3 +121,25 @@ Mac 上 assets-check、check、build 通过，在线 switch 仅重启 nginx。�
 - R4S 创建临时无 home/nologin/非特权账户，在同一实际 PAM service、同一 helper 二进制和相同安全限制下，通过独立测试 socket/19081 页面实测：错密码拒绝、正确密码登录、刷新保持、跨源退出 403、正常退出后状态 401；cookie 标志及浏览器 storage 验证通过，无页面脚本错误。随后删除临时账户、凭据、服务、运行目录和监听端口。未读取或改动生产账户密码，也未以 mock 代替本段 PAM 实测。
 - 生产 9080 显示用户名/密码表单，标准 autocomplete=username/current-password；`/api/auth` 返回 system，未登录状态接口 401。nixos 仍为 P、root 仍为 L，原状态不变。当前生产账户的正确密码由用户输入，未代用户读取或猜测。
 - 当时 cgroup 内存约 Web 8.9 MiB、helper 0.6 MiB，无 failed units。此次仍为在线 switch 验证，没有重新上电启动验收。
+
+## 2026-10-25：80 端口与持久化 Mihomo 规则管理
+
+### 构建和检查
+
+- router-console 固定 `2a971ba`，可选 mihomo_rules 插件通过配置白名单 Unix socket 管理规则；已有认证和同源写保护继续使用，不给 Web 进程网络管理权限。
+- 默认广告资产固定 MetaCubeX/meta-rules-dat commit `2d368ff6025f49e068e848487bac54056e123a79`，SHA-256 固定，904 条 domain payload；运行时为 native HTTP provider，每日更新，初始本地缓存支持离线启动。
+- 25 项应用测试 + 2 项 PAM helper 测试、Clippy、格式检查通过；前端 5 项 Playwright 和构建通过。31 项 Mihomo Python 测试通过，含 15 项规则事务测试；真实 1.19.27 校验拒绝非法 custom/classical 规则。
+- DNS/代理模块两种架构启用/禁用等求值通过；额外将主机 Mihomo 禁用后求值：规则 worker 不存在、控制台无遗留权限组、dnsmasq 保持启用。
+- Mac 执行 just assets-check/check/build 成功，ARM 应用与模块检查构建通过。最终系统 `/nix/store/ycrfjczl91202n1g5l2mk8wzy7z5d4pi-nixos-system-r4s-24.05.20241230.b134951`。
+
+### 部署和功能验证
+
+- 迁移前将 Mihomo 运行目录、旧系统及 boot.scr 备份到 `/root/mihomo-rules-20261025/`，未改旧备份和镜像。switch 后显式调用 mihomo-rules-reload 应用默认广告层；启动仅补缺失文件，不重写已有配置。
+- 总览 LAN 80 返回 200，9080 仅监听 127.0.0.1；nginx 保留经过验证的 Host 供同源认证。曾发现默认反代 Host 导致登录 403，修复后同源无效凭据正常返回 401，跨源返回 403。gixy 拒绝原始 $http_host 写法后使用推荐 $host 并重新构建通过，没有关闭检查。
+- 实际 Mihomo API 报告 router-ads 904 条规则并登记 REJECT 策略。规则应用前后非规则配置指纹、节点选择、TUN interface index、Mihomo PID、dnsmasq PID 均保持。
+- 临时无特权系统账户 + 隔离 PAM/Web 测试页面使用实际规则 worker：表单追加测试规则并应用成功；非法规则返回 400 且草稿保留；删除测试规则成功，390px 对话框无横向溢出。
+- 手写 custom.list 后显式重读，真实 /rules 中出现该规则，随后恢复原文件；新增实际 HTTPS 规则订阅成功，随后删除。并发版本变化被 409 拒绝，没有覆盖新状态。
+- 临时账户、凭据、Web/helper 进程、19081 监听、测试规则及测试 provider 缓存均已清理。保留用户原有节点、订阅及规则，当前仅新增默认 ads 源。
+- 基础 DNS TCP 解析成功，代理访问 Google generate_204 返回 204，无 failed units。规则 worker 当时 cgroup 约 21.7 MiB，控制台约 8.7 MiB，dnsmasq约 2.9 MiB。
+
+本次验证在线 switch 与运行时规则应用，没有刷机或重新上电启动验证。默认广告源不保证覆盖所有广告；编辑器暂不引入 GeoIP/GeoSite 数据库，资源与格式限制见 README。

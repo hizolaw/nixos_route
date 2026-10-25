@@ -34,6 +34,7 @@ in {
     package = routerServicePackages.mihomo;
     bootstrapServers = config.router.dns.upstreamServers;
     dashboardPackage = routerServicePackages.zashboard;
+    rules.enable = true;
     listenAddress = config.router.network.address;
     subStoreAddress = "http://127.0.0.1:${toString config.router.subStore.port}";
   };
@@ -45,7 +46,15 @@ in {
   # A switch can restart static address setup while network.target stays active.
   systemd.services.nginx = lib.mkIf config.services.nginx.enable { after = [ "network-setup.service" ]; };
   systemd.services.mihomo-router = lib.mkIf config.router.mihomo.enable { after = [ "network-setup.service" ]; };
-  services.nginx.enable = lib.mkIf config.router.subStore.enable true;
+  services.nginx.enable = lib.mkIf (config.router.subStore.enable || config.services.router-console.enable) true;
+  services.nginx.virtualHosts.router-console = lib.mkIf config.services.router-console.enable {
+    listen = [ { addr = config.router.network.address; port = 80; } ];
+    locations."/" = {
+      proxyPass = "http://127.0.0.1:${toString config.services.router-console.port}";
+      extraConfig = "proxy_set_header Host $host;";
+    };
+    extraConfig = "access_log off;";
+  };
   services.nginx.virtualHosts.sub-store = lib.mkIf config.router.subStore.enable {
     listen = [ { addr = config.router.network.address; port = config.router.subStore.port; } ];
     locations."/" = {
@@ -70,19 +79,25 @@ in {
   systemd.services.router-console = {
     after = [ "mihomo-router.service" "router-console-links.service" ];
     requires = [ "router-console-links.service" ];
-    serviceConfig.SupplementaryGroups = [ "router-status" ];
+    serviceConfig.SupplementaryGroups = lib.optionals config.router.mihomo.enable [ "router-status" ]
+      ++ lib.optional (config.router.mihomo.enable && config.router.mihomo.rules.enable) "router-console-control";
   };
   services.router-console = {
     enable = true;
     authentication = "system";
     allowedUsers = [ "nixos" "root" ];
-    listenAddress = config.router.network.address;
+    listenAddress = "127.0.0.1";
     port = 9080;
     environmentFiles = [ "-/var/lib/mihomo-router/environment" "/run/router-console-links/environment" ];
     settings = {
       title = "R4S · Router Console";
       plugins = [
         { id = "system"; name = "系统资源"; kind = "system"; interval_secs = 5; }
+        {
+          id = "mihomo-rules"; name = "Mihomo 规则"; kind = "mihomo_rules";
+          enabled = config.router.mihomo.enable && config.router.mihomo.rules.enable;
+          rpc_socket = "/run/mihomo-rules/control.sock";
+        }
         {
           id = "dns"; name = "局域网 DNS"; kind = "dns";
           enabled = config.router.dns.enable;
